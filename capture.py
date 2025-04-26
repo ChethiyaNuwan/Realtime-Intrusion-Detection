@@ -60,3 +60,33 @@ def convert_pcap(pcap_file, output_file=None):
         logging.error(f"Failed to convert pcap to flow: {str(e)}")
         return None
 
+
+if __name__ == "__main__":
+    import time
+    
+    test_pcap = "test_capture.pcap"
+    test_flow = "test_flows.csv"
+    capture_duration = 10
+    
+    print(f"Starting packet capture for {capture_duration} seconds...")
+    
+    process = capture_traffic(
+        duration=capture_duration,
+        output_file=test_pcap
+    )
+    
+    if process is None:
+        print("Failed to start capture!")
+        exit(1)
+    
+    process.wait()
+    print("Capture completed!")
+    
+    print("\nConverting PCAP to flow format...")
+    flow_file = convert_pcap(test_pcap, test_flow)
+    
+    if flow_file:
+        print(f"Success! Flow file created at: {flow_file}")
+    else:
+        print("Failed to convert PCAP to flow format!")
+
