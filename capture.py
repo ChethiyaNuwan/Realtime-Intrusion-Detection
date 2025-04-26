@@ -1,5 +1,7 @@
 import os
 from cicflowmeter.sniffer import main as cicfm_main
+import subprocess
+import logging
 
 def capture_traffic(interface=None, duration=None, output_file=None):
     """
@@ -88,7 +90,7 @@ if __name__ == "__main__":
     print("Capture completed!")
     
     print("\nConverting PCAP to flow format...")
-    flow_dir = convert_pcap(test_pcap, test_flow_dir)
+    flow_dir = convert_pcap(test_pcap_file, test_flow_dir)
     
     if flow_dir:
         print(f"Success! Flow files created at {flow_dir}")
