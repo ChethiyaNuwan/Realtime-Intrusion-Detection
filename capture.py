@@ -48,10 +48,7 @@ def convert_pcap(pcap_file, output_dir=None):
     if not os.path.exists(pcap_file):
         raise FileNotFoundError(f"PCAP file not found: {pcap_file}")
     
-    if output_file is None:
-        output_file = os.path.splitext(pcap_file)[0] + '_flows.csv'
-    
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     
     try:
         flowmeter_main(
