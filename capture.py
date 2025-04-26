@@ -56,7 +56,7 @@ def convert_pcap(pcap_file, output_dir=None):
     try:
         flowmeter_main(
             input_interface=None,
-            input_file=pcap_path,
+            input_file=pcap_file,
             csv=True,
             workers=2,
             dump_incomplete_flows=False,
