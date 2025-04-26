@@ -71,6 +71,7 @@ if __name__ == "__main__":
     print(f"Starting packet capture for {capture_duration} seconds...")
     
     process = capture_traffic(
+        interface="Ethernet 2",
         duration=capture_duration,
         output_file=test_pcap
     )
