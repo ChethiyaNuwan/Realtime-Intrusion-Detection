@@ -51,7 +51,7 @@ def convert_pcap(pcap_file, output_dir=None):
     os.makedirs(output_dir, exist_ok=True)
     
     try:
-        flowmeter_main(
+        cicfm_main(
             input_interface=None,
             input_file=pcap_file,
             csv=True,
