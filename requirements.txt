@@ -2,5 +2,9 @@ cicflowmeter @ git+https://gitlab.abo.fi/tahmad/cicflowmeter-py.git
 tshark
 numpy
 joblib
-scapy
 flask
+pandas
+tensorflow
+platform
+subprocess
+logging
