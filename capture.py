@@ -23,7 +23,7 @@ def capture_traffic(interface=None, duration=None, output_file=None):
     
     if output_file:
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        command.extend(["-F pcap -w", output_file])
+        command.extend(["-F", "pcap", "-w", output_file])
     
     try:
         process = subprocess.Popen(
@@ -70,7 +70,7 @@ def convert_pcap(pcap_file, output_dir=None):
 if __name__ == "__main__":
     import time
     
-    test_pcap_file = "test_capture.pcap"
+    test_pcap_file = "captures/test_capture.pcap"
     test_flow_dir = "test_flows/"
     capture_duration = 10
     
