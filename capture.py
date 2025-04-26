@@ -1,5 +1,4 @@
 import os
-from cicflowmeter.sniffer import main as cicfm_main
 import subprocess
 import logging
 
@@ -38,7 +37,7 @@ def capture_traffic(interface=None, duration=None, output_file=None):
         return None
 
 
-def convert_pcap(pcap_file, output_dir=None):
+def convert_pcap(pcap_file, output_dir='flows/'):
     """
     Convert pcap file to flow file using cicflowmeter
     Args:
@@ -51,17 +50,17 @@ def convert_pcap(pcap_file, output_dir=None):
         raise FileNotFoundError(f"PCAP file not found: {pcap_file}")
     
     os.makedirs(output_dir, exist_ok=True)
+
+    command = ["cicflowmeter", "-c", "-f", pcap_file, "--dir", output_dir]
     
     try:
-        cicfm_main(
-            input_interface=None,
-            input_file=pcap_file,
-            csv=True,
-            workers=2,
-            dump_incomplete_flows=False,
-            output_directory=output_dir
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
         )
-        return output_dir
+        return process
     except Exception as e:
         logging.error(f"Failed to convert pcap to flow: {str(e)}")
         return None
@@ -71,29 +70,27 @@ if __name__ == "__main__":
     import time
     
     test_pcap_file = "captures/test_capture.pcap"
-    test_flow_dir = "test_flows/"
+    test_flow_dir = "flows/"
     capture_duration = 10
+    interface = "Ethernet 2"
     
     print(f"Starting packet capture for {capture_duration} seconds...")
+    capture_process = capture_traffic(interface, capture_duration, test_pcap_file)
     
-    process = capture_traffic(
-        interface="Ethernet 2",
-        duration=capture_duration,
-        output_file=test_pcap_file
-    )
-    
-    if process is None:
+    if capture_process is None:
         print("Failed to start capture!")
         exit(1)
     
-    process.wait()
+    capture_process.wait()
     print("Capture completed!")
     
     print("\nConverting PCAP to flow format...")
-    flow_dir = convert_pcap(test_pcap_file, test_flow_dir)
-    
-    if flow_dir:
-        print(f"Success! Flow files created at {flow_dir}")
-    else:
+    convert_process = convert_pcap(test_pcap_file, test_flow_dir)
+
+    if convert_process is None:
         print("Failed to convert PCAP to flow format!")
+        exit(1)
+
+    convert_process.wait()
+    print("Conversion completed!")
 
