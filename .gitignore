@@ -2,3 +2,4 @@
 captures/
 flows/
 logs/
+__pycache__/
