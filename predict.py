@@ -14,7 +14,8 @@ def preprocess_flow(flow_file):
     preprocessors = joblib.load('lib/preprocessors.pkl')
     
     df = pd.read_csv(flow_file)
-    df = df.drop(columns=preprocessors['dropped_cols'], errors='ignore')  
+    df = df.drop(columns=preprocessors['dropped_cols'] + ['Label'])
+    
     X = preprocessors['imputer'].transform(df)
     X = preprocessors['constant_filter'].transform(X)
     X = preprocessors['scaler'].transform(X)
@@ -51,7 +52,7 @@ def predict_attack(X):
 
 
 if __name__ == "__main__":
-    test_flow_file = "flows/test_capture.pcap_Flow.csv"
+    test_flow_file = "flows/synk.pcap_Flow.csv"
     
     print("Starting prediction test...")
     
@@ -69,11 +70,14 @@ if __name__ == "__main__":
         print("\nTesting prediction...")
         pred_label, pred_probs = predict_attack(X)
         
-        print("\nPrediction Results:")
-        for i, (label, probs) in enumerate(zip(pred_label, pred_probs)):
+        unique_labels, counts = np.unique(pred_label, return_counts=True)
+        total_flows = len(pred_label)
+        
+        print("\nPrediction Distribution:")
+        for label, count in zip(unique_labels, counts):
             attack_type = label_mapping[label]
-            confidence = probs[label] * 100
-            print(f"Flow {i+1}: {attack_type} (Confidence: {confidence:.2f}%)")
+            percentage = (count / total_flows) * 100
+            print(f"{attack_type}: {count} flows ({percentage:.2f}%)")
             
     except FileNotFoundError as e:
         print(f"Error: {e}")
