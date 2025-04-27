@@ -2,6 +2,8 @@ import pandas as pd
 import joblib
 import numpy as np
 import tensorflow as tf
+import os
+from utils import get_latest_csv
 
 def preprocess_flow(flow_file):
     """
@@ -14,7 +16,7 @@ def preprocess_flow(flow_file):
     preprocessors = joblib.load('lib/preprocessors.pkl')
     
     df = pd.read_csv(flow_file)
-    df = df.drop(columns=preprocessors['dropped_cols'] + ['Label'])
+    df = df.drop(columns=preprocessors['dropped_cols'] + ['Label'], errors='ignore')
     
     X = preprocessors['imputer'].transform(df)
     X = preprocessors['constant_filter'].transform(X)
@@ -31,20 +33,18 @@ def get_label_mapping():
         dict: Mapping of label indices to attack types
     """
     preprocessors = joblib.load('lib/preprocessors.pkl')
-    print(preprocessors['label_mapping'])
     return {v: k for k, v in preprocessors['label_mapping'].items()}
 
 
-def predict_attack(X):
+def predict_attack(X, model):
     """
     Get predictions using the deep learning model
     Args:
+        model (keras): Trained deep learning model
         X (numpy.ndarray): Preprocessed features
     Returns:
         tuple: (predicted_label, prediction_probabilities)
     """
-    model = tf.keras.models.load_model('lib/deep_learning_model.h5')
-
     pred_probs = model.predict(X)
     pred_label = pred_probs.argmax(axis=1)
     
@@ -52,13 +52,23 @@ def predict_attack(X):
 
 
 if __name__ == "__main__":
-    test_flow_file = "flows/synk.pcap_Flow.csv"
+    model = tf.keras.models.load_model('lib/deep_learning_model.h5')
+    flow_file = ""
+    
+    if flow_file == "" or not os.path.exists(flow_file):
+        flow_file = get_latest_csv("flows/")
+        if flow_file is None:
+            print("Error: No CSV files found in the flows directory!")
+            exit(1)
+        print(f"Using latest flow file: {flow_file}")
+    else:
+        print(f"Using default flow file: {flow_file}")
     
     print("Starting prediction test...")
     
     try:
         print("\nTesting preprocessing...")
-        X = preprocess_flow(test_flow_file)
+        X = preprocess_flow(flow_file)
         print("Preprocessing successful!")
         print(f"Preprocessed data shape: {X.shape}")
         
@@ -68,7 +78,7 @@ if __name__ == "__main__":
         print("Available attack types:", list(label_mapping.values()))
         
         print("\nTesting prediction...")
-        pred_label, pred_probs = predict_attack(X)
+        pred_label, pred_probs = predict_attack(X, model)
         
         unique_labels, counts = np.unique(pred_label, return_counts=True)
         total_flows = len(pred_label)
