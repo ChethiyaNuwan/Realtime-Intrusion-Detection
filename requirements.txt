@@ -1,4 +1,3 @@
-cicflowmeter @ git+https://gitlab.abo.fi/tahmad/cicflowmeter-py.git
 numpy
 joblib
 flask
