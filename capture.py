@@ -1,6 +1,8 @@
 import os
 import subprocess
 import logging
+import time
+from utils import get_latest_pcap
 
 def capture_traffic(interface=None, duration=None, output_file=None):
     """
@@ -33,6 +35,10 @@ def capture_traffic(interface=None, duration=None, output_file=None):
             stderr=subprocess.PIPE,
             universal_newlines=True
         )
+        error = process.stderr.readline()
+        if error and "error" in error.lower():
+            raise Exception(f"Tshark error: {error}")
+
         return process
     except Exception as e:
         logging.error(f"Failed to start packet capture: {str(e)}")
@@ -57,6 +63,10 @@ def convert_pcap(pcap_file_path, output_dir='flows/'):
     os.makedirs(output_dir, exist_ok=True)
 
     cicflowmeter_path = os.path.join('lib', 'CICFlowmeter', 'bin', 'cfm.bat')
+    
+    if not os.path.exists(cicflowmeter_path):
+        raise FileNotFoundError(f"CICFlowmeter not found at: {cicflowmeter_path}")
+    
     command = [cicflowmeter_path, pcap_file_path, output_dir]
     
     try:
@@ -67,6 +77,9 @@ def convert_pcap(pcap_file_path, output_dir='flows/'):
             universal_newlines=True,
             shell=True
         )
+        error = process.stderr.readline()
+        if error:
+            raise Exception(f"CICFlowmeter error: {error}")
         return process
     except Exception as e:
         logging.error(f"Failed to convert pcap to flow: {str(e)}")
@@ -74,23 +87,35 @@ def convert_pcap(pcap_file_path, output_dir='flows/'):
 
 
 if __name__ == "__main__":
-    test_pcap_file = "captures/test_capture.pcap"
-    test_flow_dir = "flows/"
+    pcap_dir = "captures"
+    flow_dir = "flows"
+    os.makedirs(pcap_dir, exist_ok=True)
+    os.makedirs(flow_dir, exist_ok=True)
+    
+    # Generate timestamp for pcap file
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    pcap_file = os.path.join(pcap_dir, f"capture_{timestamp}.pcap")
+    
     capture_duration = 10
     interface = "Ethernet 2"
     
     print(f"Starting packet capture for {capture_duration} seconds...")
-    capture_process = capture_traffic(interface, capture_duration, test_pcap_file)
+    capture_process = capture_traffic(interface, capture_duration, pcap_file)
     
     if capture_process is None:
         print("Failed to start capture!")
         exit(1)
     
     capture_process.wait()
-    print("Capture completed!")
+    print(f"Capture completed! Saved to: {pcap_file}")
     
     print("\nConverting PCAP to flow format...")
-    convert_process = convert_pcap(test_pcap_file, test_flow_dir)
+    latest_pcap = get_latest_pcap(pcap_dir)
+    if latest_pcap is None:
+        print("No pcap files found in captures directory!")
+        exit(1)
+        
+    convert_process = convert_pcap(latest_pcap, flow_dir)
 
     if convert_process is None:
         print("Failed to convert PCAP to flow format!")
@@ -98,4 +123,3 @@ if __name__ == "__main__":
 
     convert_process.wait()
     print("Conversion completed!")
-
