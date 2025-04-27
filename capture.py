@@ -56,7 +56,7 @@ def convert_pcap(pcap_file_path, output_dir='flows/'):
     
     os.makedirs(output_dir, exist_ok=True)
 
-    cicflowmeter_path = os.path.join('lib', 'CICFlowmeter', 'bin', 'cfm')
+    cicflowmeter_path = os.path.join('lib', 'CICFlowmeter', 'bin', 'cfm.bat')
     command = [cicflowmeter_path, pcap_file_path, output_dir]
     
     try:
@@ -64,7 +64,8 @@ def convert_pcap(pcap_file_path, output_dir='flows/'):
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            shell=True
         )
         return process
     except Exception as e:
