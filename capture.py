@@ -8,9 +8,11 @@ def capture_traffic(interface=None, duration=None, output_file=None):
     Args:
         interface (str): Network interface to capture traffic from
         duration (int): Duration in seconds to capture traffic (None for continuous)
-        output_file (str): Path to save the captured packets
+        output_file (str): Path to save the captured packets in PCAP format
     Returns:
-        subprocess.Popen: The tshark process
+        subprocess.Popen: The tshark process object, or None if capture fails
+    Raises:
+        Exception: If tshark command fails to execute
     """
     command = ["tshark", "-l"]
     
@@ -37,21 +39,25 @@ def capture_traffic(interface=None, duration=None, output_file=None):
         return None
 
 
-def convert_pcap(pcap_file, output_dir='flows/'):
+def convert_pcap(pcap_file_path, output_dir='flows/'):
     """
     Convert pcap file to flow file using cicflowmeter
     Args:
-        pcap_file (str): Path to the pcap file
-        output_file (str): Path to save the flow file (CSV format)
+        pcap_file_path (str): Path to the pcap file to be converted
+        output_dir (str): Directory path to save the generated flow files (CSV format), defaults to 'flows/'
     Returns:
-        str: Path to the generated flow file
+        subprocess.Popen: The cicflowmeter process object, or None if conversion fails
+    Raises:
+        FileNotFoundError: If the specified PCAP file does not exist
+        Exception: If cicflowmeter command fails to execute
     """
-    if not os.path.exists(pcap_file):
-        raise FileNotFoundError(f"PCAP file not found: {pcap_file}")
+    if not os.path.exists(pcap_file_path):
+        raise FileNotFoundError(f"PCAP file not found: {pcap_file_path}")
     
     os.makedirs(output_dir, exist_ok=True)
 
-    command = ["cicflowmeter", "-c", "-f", pcap_file, "--dir", output_dir]
+    cicflowmeter_path = os.path.join('lib', 'CICFlowmeter', 'bin', 'cfm')
+    command = [cicflowmeter_path, pcap_file_path, output_dir]
     
     try:
         process = subprocess.Popen(
@@ -67,8 +73,6 @@ def convert_pcap(pcap_file, output_dir='flows/'):
 
 
 if __name__ == "__main__":
-    import time
-    
     test_pcap_file = "captures/test_capture.pcap"
     test_flow_dir = "flows/"
     capture_duration = 10
