@@ -212,10 +212,12 @@ if __name__ == '__main__':
     os.makedirs("logs", exist_ok=True)
     
     # Start the cleanup thread
-    cleanup_thread = threading.Thread(target=cleanup_thread, daemon=True)
-    cleanup_thread.start()
     monitoring_thread = threading.Thread(target=monitor_network, args=('Ethernet 2',), daemon=True)
     monitoring_thread.start()
+    # cleanup_thread = threading.Thread(target=cleanup_thread, daemon=True)
+    # cleanup_thread.start()
+
+    cleanup_thread()
     
     # Run the Flask app
     # app.run(host='0.0.0.0', port=5000, debug=True)
