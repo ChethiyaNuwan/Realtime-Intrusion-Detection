@@ -79,7 +79,7 @@ def convert_pcap(pcap_file_path, output_dir='flows/'):
         )
         error = process.stderr.readline()
         if error:
-            raise Exception(f"CICFlowmeter error: {error}")
+            logging.exception(f"CICFlowmeter error: {error}")
         return process
     except Exception as e:
         logging.error(f"Failed to convert pcap to flow: {str(e)}")
