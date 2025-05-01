@@ -201,7 +201,7 @@ def get_latest_data():
     if interface not in interface_data:
         return jsonify({'error': 'Interface not found'}), 404
         
-    data = interface_data[interface][-80:] if interface_data[interface] else []
+    data = interface_data[interface][-MAX_FILES_KEPT:] if interface_data[interface] else []
     return jsonify({'data': data})
 
 
@@ -214,6 +214,8 @@ if __name__ == '__main__':
     # Start the cleanup thread
     cleanup_thread = threading.Thread(target=cleanup_thread, daemon=True)
     cleanup_thread.start()
+    monitoring_thread = threading.Thread(target=monitor_network, args=('Ethernet 2',), daemon=True)
+    monitoring_thread.start()
     
     # Run the Flask app
     app.run(host='0.0.0.0', port=5000, debug=True)
