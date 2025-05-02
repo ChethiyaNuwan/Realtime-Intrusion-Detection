@@ -117,6 +117,7 @@ def monitor_network(interface):
             # Process real-time output
             packet_count = 0
             start_time = time.time()
+            current_pps = 0
             
             while capture_process.poll() is None:
                 output = capture_process.stdout.readline()
@@ -126,11 +127,12 @@ def monitor_network(interface):
                     time_diff = current_time - start_time
                     
                     if time_diff >= 1:  # Calculate PPS every second
-                        pps = packet_count / time_diff
+                        current_pps = packet_count / time_diff
                         interface_data[interface].append({
                             'timestamp': current_time,
-                            'pps': pps,
-                            'predicted_label': 'Benign'  # Placeholder until ML prediction
+                            'pps': round(current_pps, 0),
+                            'predicted_label': 'Benign',  # Placeholder until ML prediction,
+                            'confidence': 100
                         })
                         
                         if len(interface_data[interface]) > MAX_FILES_KEPT:
@@ -165,8 +167,9 @@ def monitor_network(interface):
                         
                         interface_data[interface].append({
                             'timestamp': time.time(),
-                            'pps': 0, 
-                            'predicted_label': attack_type
+                            'pps': round(current_pps, 0), 
+                            'predicted_label': attack_type,
+                            'confidence': confidence
                         })
                         
                         if len(interface_data[interface]) > MAX_FILES_KEPT:
