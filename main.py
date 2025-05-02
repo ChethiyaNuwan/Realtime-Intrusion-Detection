@@ -5,10 +5,11 @@ import threading
 import platform
 import subprocess
 import os
+import json
 import tensorflow as tf
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 from collections import defaultdict
-from db import get_db_connection, store_attack_details
+from db import get_db_connection, store_attack_details, get_latest_attack_logs # Import get_latest_attack_logs
 from capture import capture_traffic, convert_pcap
 from predict import preprocess_flow, predict_attack, get_label_mapping
 from utils import get_latest_pcap, get_latest_csv
@@ -37,7 +38,6 @@ dl_model = tf.keras.models.load_model('lib/deep_learning_model.h5')
 label_mapping = get_label_mapping()
 
 # Global variables to store state
-log_storage = []
 interface_data = defaultdict(list)
 
 # Initialize Flask app
@@ -97,7 +97,7 @@ def cleanup_old_files(directory, max_files):
 
 
 def monitor_network(interface):
-    """Periodic PCAP-based monitoring function"""
+    """Real-time network monitoring function"""
     while True:
         try:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -110,6 +110,31 @@ def monitor_network(interface):
                 logging.error("Failed to start capture")
                 time.sleep(MONITORING_INTERVAL)
                 continue
+            
+            # Process real-time output
+            packet_count = 0
+            start_time = time.time()
+            
+            while capture_process.poll() is None:
+                output = capture_process.stdout.readline()
+                if output:
+                    packet_count += 1
+                    current_time = time.time()
+                    time_diff = current_time - start_time
+                    
+                    if time_diff >= 1:  # Calculate PPS every second
+                        pps = packet_count / time_diff
+                        interface_data[interface].append({
+                            'timestamp': current_time,
+                            'pps': pps,
+                            'predicted_label': 'Analyzing...'  # Placeholder until ML prediction
+                        })
+                        
+                        if len(interface_data[interface]) > MAX_FILES_KEPT:
+                            interface_data[interface] = interface_data[interface][-MAX_FILES_KEPT:]
+                        
+                        packet_count = 0
+                        start_time = current_time
             
             capture_process.wait()
             
@@ -148,6 +173,7 @@ def monitor_network(interface):
                         if confidence > 90 and str.lower(attack_type) != "benign":
                             logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
                             store_attack_details(
+                                connection=connection,
                                 attack_type=attack_type,
                                 confidence=confidence,
                                 interface=interface,
@@ -184,40 +210,90 @@ def get_interfaces_route():
     interfaces = get_interfaces()
     return jsonify({'interfaces': interfaces})
 
-@app.route('/start_monitoring', methods=['POST'])
+@app.route('/start_monitoring', methods=['POST']) # Changed to POST
 def start_monitoring_route():
-    interface = request.json.get('interface')
+    data = request.get_json()
+    interface = data.get('interface')
     if not interface:
         return jsonify({'error': 'No interface specified'}), 400
-    
+
+    # Check if monitoring for this interface is already running (optional, depends on desired behavior)
+    # For simplicity, we'll start a new thread each time, assuming the user wants to restart monitoring.
+    # A more robust solution might manage threads to avoid duplicates.
+
+    logging.info(f"Received request to start monitoring on {interface}")
     monitoring_thread = threading.Thread(target=monitor_network, args=(interface,), daemon=True)
     monitoring_thread.start()
-    
+
     return jsonify({'message': f'Started monitoring on {interface}'})
 
 @app.route('/get_latest_data')
 def get_latest_data():
     interface = request.args.get('interface')
+    if not interface:
+        return jsonify({'error': 'No interface specified'}), 400
     if interface not in interface_data:
-        return jsonify({'error': 'Interface not found'}), 404
-        
-    data = interface_data[interface][-MAX_FILES_KEPT:] if interface_data[interface] else []
+        return jsonify({'data': []})
+
+    data = interface_data[interface][-1:] if interface_data[interface] else []
     return jsonify({'data': data})
 
+@app.route('/get_attack_logs')
+def get_attack_logs_route():
+    logs = get_latest_attack_logs(connection)
+    log_list = []
+    if logs:
+        for log in logs:
+            log_list.append({
+                'id': log[0],
+                'attack_type': log[1],
+                'confidence': log[2],
+                'interface': log[3],
+                'timestamp': log[4].strftime('%Y-%m-%d %H:%M:%S'), # Format datetime
+                'source_ip': log[5],
+                'dest_ip': log[6]
+            })
+    return jsonify(log_list)
+
+
+@app.route('/stream_packets')
+def stream_packets():
+    def generate():
+        interface = request.args.get('interface')
+        if not interface:
+            yield f"data: {json.dumps({'error': 'No interface specified'})}\n\n"
+            return
+
+        last_streamed_timestamp = 0
+        try:
+            while True:
+                if interface in interface_data and interface_data[interface]:
+                    latest_data = interface_data[interface][-1] 
+                    # Only send if it's newer than the last one sent
+                    if latest_data['timestamp'] > last_streamed_timestamp:
+                        yield f"data: {json.dumps(latest_data)}\n\n"
+                        last_streamed_timestamp = latest_data['timestamp']
+                # Check for new data every second (adjust as needed)
+                time.sleep(1)
+        except GeneratorExit:
+            logging.info(f"Client disconnected from stream for interface {interface}")
+        except Exception as e:
+            logging.error(f"Error in stream for interface {interface}: {e}")
+            yield f"data: {json.dumps({'error': f'Stream error: {e}'})}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
 
 
 if __name__ == '__main__':
     os.makedirs("captures", exist_ok=True)
     os.makedirs("flows", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
-    
-    # Start the cleanup thread
-    # monitoring_thread = threading.Thread(target=monitor_network, args=('Ethernet 2',), daemon=True)
-    # monitoring_thread.start()
-    cleanup_thread = threading.Thread(target=cleanup_thread, daemon=True)
-    cleanup_thread.start()
 
-    monitor_network('Ethernet 2')
-    
+    # Start the cleanup thread
+    cleanup_thread_instance = threading.Thread(target=cleanup_thread, daemon=True)
+    cleanup_thread_instance.start()
+
+    # monitor_network('Ethernet 2')
+
     # Run the Flask app
-    # app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True) # Uncommented and enabled debug mode
