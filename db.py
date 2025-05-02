@@ -77,3 +77,12 @@ def get_latest_attack_logs(connection):
     finally:
         if cursor:
             cursor.close()
+
+
+if __name__ == "__main__":
+    db_connection = get_db_connection()
+    if db_connection:
+        logging.info("Connected to MySQL database")
+        db_connection.close()
+    else:
+        logging.error("Failed to connect to MySQL database")
