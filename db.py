@@ -6,9 +6,10 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host='localhost',
             database='intrusion_detection',
-            user='your_username',
-            password='your_password'
+            user='root',
+            password=''
         )
+        
         if connection.is_connected():
             cursor = connection.cursor()
         
