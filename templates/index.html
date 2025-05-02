@@ -1,435 +1,511 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Real Time Threat Monitoring and Detection Dashboard</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real Time Threat Monitoring and Detection Dashboard</title>
 
     <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
 
     <!-- FontAwesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      rel="stylesheet"
+    />
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Add this line -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 
     <!-- Custom Styles -->
     <style>
-        body {
-            background-color: #f5f5f5;
-        }
-        .navbar {
-            background-color: #ffffff;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            margin-top: 20px;
-            padding: 10px 20px;
-        }
-        .navbar-brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-        .nav-link {
-            margin-right: 15px;
-            color: #333;
-            font-size: 1.1rem;
-        }
-        .nav-link:hover {
-            color: #007bff;
-        }
-        .chart-card {
-            margin-bottom: 30px;
-            padding: 20px;
-            background-color: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            width: 100%;
-        }
-        .footer {
-            background-color: #ffffff;
-            color: #777;
-            text-align: center;
-            padding: 15px;
-            border-top: 1px solid #e0e0e0;
-            margin-top: 50px;
-        }
-        .chart-container {
-            width: 100%;
-            margin: auto;
-        }
-        .terminal {
-            background-color: #000;
-            color: #0f0;
-            padding: 10px;
-            height: 200px;
-            overflow-y: scroll;
-            font-family: 'Courier New', Courier, monospace;
-            border-radius: 5px;
-            margin-top: 20px;
-        }
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: -300px;
-            width: 300px;
-            height: 100%;
-            background-color: #343a40;
-            color: #fff;
-            overflow-y: auto;
-            transition: left 0.3s;
-            z-index: 1000;
-            padding: 20px;
-        }
-        .sidebar.open {
-            left: 0;
-        }
-        .sidebar h5 {
-            color: #ffffff;
-            margin-bottom: 20px;
-        }
-        .sidebar .alert {
-            margin-bottom: 10px;
-            font-size: 0.9rem;
-        }
-        .toggle-sidebar {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background-color: #343a40;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 10px 15px;
-            z-index: 1100;
-        }
+      body {
+        background-color: #f5f5f5;
+      }
+      .navbar {
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        margin-top: 20px;
+        padding: 10px 20px;
+      }
+      .navbar-brand {
+        font-size: 1.5rem;
+        font-weight: bold;
+      }
+      .nav-link {
+        margin-right: 15px;
+        color: #333;
+        font-size: 1.1rem;
+      }
+      .nav-link:hover {
+        color: #007bff;
+      }
+      .chart-card {
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        width: 100%;
+      }
+      .footer {
+        background-color: #ffffff;
+        color: #777;
+        text-align: center;
+        padding: 15px;
+        border-top: 1px solid #e0e0e0;
+        margin-top: 50px;
+      }
+      .chart-container {
+        width: 100%;
+        margin: auto;
+      }
+      .terminal {
+        background-color: #000;
+        color: #0f0;
+        padding: 10px;
+        height: 200px;
+        overflow-y: scroll;
+        font-family: "Courier New", Courier, monospace;
+        border-radius: 5px;
+        margin-top: 20px;
+      }
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: -300px;
+        width: 300px;
+        height: 100%;
+        background-color: #343a40;
+        color: #fff;
+        overflow-y: auto;
+        transition: left 0.3s;
+        z-index: 1000;
+        padding: 20px;
+        padding-top: 90px;
+      }
+      .sidebar.open {
+        left: 0;
+      }
+      .sidebar h5 {
+        color: #ffffff;
+        margin-bottom: 20px;
+      }
+      .sidebar .alert {
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+      }
+      .toggle-sidebar {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        background-color: #343a40;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        padding: 10px 15px;
+        z-index: 1100;
+      }
     </style>
-</head>
-<body>
-<!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-light container">
-    <a class="navbar-brand ms-3" href="#"><i class="fas fa-network-wired"></i> Real Time Threat Monitoring and Detection Dashboard </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
+    />
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light container">
+      <a class="navbar-brand ms-3" href="#"
+        ><i class="fas fa-network-wired"></i> Real Time Threat Monitoring and
+        Detection Dashboard
+      </a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+        aria-controls="navbarNav"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
         <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
-                <a class="nav-link" href="#"><i class="fas fa-chart-line"></i> Dashboard</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="#"><i class="fas fa-cogs"></i> Settings</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="#"><i class="fas fa-question-circle"></i> Help</a>
-            </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#"
+              ><i class="fas fa-chart-line"></i> Dashboard</a
+            >
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#"
+              ><i class="fas fa-cogs"></i> Settings</a
+            >
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#"
+              ><i class="fas fa-question-circle"></i> Help</a
+            >
+          </li>
         </ul>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<!-- Sidebar for Alerts -->
-<div class="sidebar" id="alertSidebar">
-    <!-- <h5 class="text-end"><i class="fas fa-bell"></i> Alerts</h5> -->
-    <div id="alertContainer">
+    <!-- Sidebar for Alerts -->
+    <div class="sidebar" id="alertSidebar">
+      <!-- <h5 class="text-end"><i class="fas fa-bell"></i> Alerts</h5> -->
+      <div id="alertContainer">
         <!-- Alerts will be dynamically added here -->
+      </div>
     </div>
-</div>
 
-<!-- Button to toggle sidebar -->
-<button class="toggle-sidebar border" onclick="toggleSidebar()">Alerts</button>
+    <!-- Button to toggle sidebar -->
+    <button class="toggle-sidebar border" onclick="toggleSidebar()">
+      Alerts
+    </button>
 
-<!-- Main Content -->
-<div class="container my-5">
-    <h2 class="text-center mb-4"> Network Traffic Analysis </h2>
+    <!-- Main Content -->
+    <div class="container my-5">
+      <h2 class="text-center mb-4">Network Traffic Analysis</h2>
 
-    <!-- Interface Selector and Button Row -->
-    <div class="row justify-content-center align-items-center mb-4">
+      <!-- Interface Selector and Button Row -->
+      <div class="row justify-content-center align-items-center mb-4">
         <div class="col-md-8 d-flex align-items-center">
-            <label for="interfaceSelect" class="form-label mb-0 me-2 text-nowrap">Select Network Interface:</label>
-            <select class="form-select" id="interfaceSelect" style="min-width:220px;">
-                <option selected disabled>Loading interfaces...</option>
-                <!-- Interfaces will be populated here by JavaScript -->
-            </select>
+          <label for="interfaceSelect" class="form-label mb-0 me-2 text-nowrap"
+            >Select Network Interface:</label
+          >
+          <select
+            class="form-select"
+            id="interfaceSelect"
+            style="min-width: 220px"
+          >
+            <option selected disabled>Loading interfaces...</option>
+            <!-- Interfaces will be populated here by JavaScript -->
+          </select>
         </div>
-    </div>
+      </div>
 
-
-    <div id="charts-container" class="row">
-        <div class="col-12">
-            <div class="chart-card chart-container">
-                <canvas id="networkChart"></canvas>
-            </div>
+      <div id="charts-container" class="row">
+        <div class="col-6">
+          <div class="chart-card chart-container">
+            <canvas id="ppsChart"></canvas>
+          </div>
         </div>
-    </div>
+        <div class="col-6">
+          <div class="chart-card chart-container">
+            <canvas id="networkChart"></canvas>
+          </div>
+        </div>
+      </div>
 
-    <!-- Terminal-like div for prediction updates -->
-    <h4 class="text-center mb-3 mt-4">Prediction Log</h4>
-    <div class="terminal" id="terminal">
+      <!-- Terminal-like div for prediction updates -->
+      <h4 class="text-center mb-3 mt-4">Prediction Log</h4>
+      <div class="terminal" id="terminal">
         <!-- Prediction updates will be dynamically appended here -->
-    </div>
+      </div>
 
-    <!-- Terminal-like div for attack logs -->
-    <h4 class="text-center mb-3 mt-4">Real-Time Attack Notice </h4>
-    <div class="terminal" id="terminal2">
+      <!-- Terminal-like div for attack logs -->
+      <h4 class="text-center mb-3 mt-4">Real-Time Attack Notice</h4>
+      <div class="terminal" id="terminal2">
         <!-- Attack logs will be dynamically appended here -->
-    </div>
+      </div>
 
-    <!-- New Terminal-like div for real-time stream -->
-    <h4 class="text-center mb-3 mt-4">Real-Time Data Stream</h4>
-    <div class="terminal" id="streamTerminal">
+      <!-- New Terminal-like div for real-time stream -->
+      <h4 class="text-center mb-3 mt-4">Real-Time Data Stream</h4>
+      <div class="terminal" id="streamTerminal">
         <!-- Streamed data will be dynamically appended here -->
+      </div>
     </div>
-</div>
 
-<!-- Footer -->
-<footer class="footer">
-    <p>&copy; 2025 Real Time Threat Monitoring and Detection Dashboard @ All rights reserved.</p>
-</footer>
+    <!-- Footer -->
+    <footer class="footer">
+      <p>
+        &copy; 2025 Real Time Threat Monitoring and Detection Dashboard @ All
+        rights reserved.
+      </p>
+    </footer>
 
-<script>
-    const ctx = document.getElementById('networkChart').getContext('2d');
-    const terminal = document.getElementById('terminal');
-    const terminal2 = document.getElementById('terminal2');
-    const streamTerminal = document.getElementById('streamTerminal');
-    const alertSidebar = document.getElementById('alertSidebar');
-    const alertContainer = document.getElementById('alertContainer');
-    const interfaceSelect = document.getElementById('interfaceSelect');
+    <script>
+      const ctx = document.getElementById("networkChart").getContext("2d");
+      const ppsCtx = document.getElementById("ppsChart").getContext("2d");
+      const terminal = document.getElementById("terminal");
+      const terminal2 = document.getElementById("terminal2");
+      const streamTerminal = document.getElementById("streamTerminal");
+      const alertSidebar = document.getElementById("alertSidebar");
+      const alertContainer = document.getElementById("alertContainer");
+      const interfaceSelect = document.getElementById("interfaceSelect");
 
-    let selectedInterface = null;
-    let fetchDataInterval = null;
-    let fetchAlertsInterval = null; 
-    let eventSource = null;
+      let selectedInterface = null;
+      let fetchDataInterval = null;
+      let fetchAlertsInterval = null;
+      let eventSource = null;
 
-    // Function to toggle the sidebar
-    function toggleSidebar() {
-        alertSidebar.classList.toggle('open');
-    }
+      // Function to toggle the sidebar
+      function toggleSidebar() {
+        alertSidebar.classList.toggle("open");
+      }
 
-    // Chart setup (Label changed)
-    const networkChart = new Chart(ctx, {
-        type: 'line',
+      // Add this at the top of your script, after variable declarations
+      const predictionLabelMap = new Map();
+      let nextLabelId = 1;
+
+      // Chart setup for network chart (add this before PPS chart)
+      const networkChart = new Chart(ctx, {
+        type: "scatter",
         data: {
-            labels: [],
-            datasets: [{
-                label: 'Predictions Over Time', // Changed Label
-                data: [], // Data will be timestamps or sequence numbers
-                borderColor: 'rgba(0, 200, 81, 1)',
-                backgroundColor: 'rgba(0, 200, 81, 0.2)',
-                fill: true,
-                borderWidth: 2,
-                // We might need a way to visualize labels on the chart,
-                // perhaps using annotations or different point colors.
-                // For now, it just plots points over time.
-            }]
+          datasets: [
+            {
+              label: "Attack Types",
+              data: [], // Will contain {x: timestamp, y: labelId}
+              backgroundColor: function (context) {
+                const label = context.raw?.label;
+                return label && label.toLowerCase() !== "benign"
+                  ? "rgba(255, 99, 132, 0.8)"
+                  : "rgba(0, 200, 81, 0.8)";
+              },
+              borderColor: function (context) {
+                const label = context.raw?.label;
+                return label && label.toLowerCase() !== "benign"
+                  ? "rgba(255, 99, 132, 1)"
+                  : "rgba(0, 200, 81, 1)";
+              },
+              pointRadius: function (context) {
+                const label = context.raw?.label;
+                return label && label.toLowerCase() !== "benign" ? 8 : 6;
+              },
+              pointStyle: "circle",
+            },
+          ],
         },
         options: {
-            scales: {
-                x: { title: { display: true, text: 'Time' } },
-                y: {
-                    title: { display: true, text: 'Prediction Sequence' }, // Changed Label
-                    ticks: {
-                        // Hide Y-axis labels as they don't represent a quantity now
-                        callback: function(value, index, values) {
-                            return ''; // Return empty string to hide labels
-                        }
-                    }
-                 }
+          responsive: true,
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                unit: "second",
+                displayFormats: {
+                  second: "HH:mm:ss",
+                },
+              },
+              title: {
+                display: true,
+                text: "Time",
+              },
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        // Potentially customize tooltip later to show label
-                    }
-                }
-            }
+            y: {
+              title: {
+                display: true,
+                text: "Attack Types",
+              },
+              ticks: {
+                callback: function (value) {
+                  // Convert numeric value back to label for y-axis
+                  for (let [label, id] of predictionLabelMap) {
+                    if (id === value) return label;
+                  }
+                  return "";
+                },
+              },
+            },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  const point = context.raw;
+                  const time = new Date(point.x).toLocaleTimeString();
+                  return `${point.label} (${time})`;
+                },
+              },
+            },
+            legend: {
+              display: false,
+            },
+          },
+        },
+      });
+
+      // Move PPS Chart setup to global scope
+      const ppsChart = new Chart(ppsCtx, {
+        type: "line",
+        data: {
+          datasets: [
+            {
+              label: "Packets Per Second",
+              data: [], // Will contain {x: timestamp, y: pps}
+              borderColor: "rgba(75, 192, 192, 1)",
+              backgroundColor: "rgba(75, 192, 192, 0.2)",
+              fill: true,
+              tension: 0.4,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                unit: "second",
+                displayFormats: {
+                  second: "HH:mm:ss",
+                },
+              },
+              title: {
+                display: true,
+                text: "Time",
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: "Packets/Second",
+              },
+              beginAtZero: true,
+            },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  const point = context.raw;
+                  return `${point.y} PPS`;
+                },
+              },
+            },
+          },
+        },
+      });
+
+      function addLog(terminalElement, message, isError = false) {
+        const logEntry = document.createElement("div");
+        logEntry.textContent = message;
+        if (isError) {
+          logEntry.style.color = "#ff4444";
         }
-    });
+        terminalElement.appendChild(logEntry);
+        terminalElement.scrollTop = terminalElement.scrollHeight;
+      }
 
-    // Function to add a log message to a terminal
-    function addLog(termElement, message, isAlert = false) {
-        const div = document.createElement('div');
-        if (isAlert) {
-            div.style.color = 'red'; // Highlight alerts
-            div.style.fontWeight = 'bold';
-        }
-        // Sanitize message before setting innerText to prevent potential XSS
-        // (Although innerText usually handles this, explicit check is safer)
-        const safeMessage = String(message).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        div.innerText = safeMessage;
-        termElement.appendChild(div);
-        termElement.scrollTop = termElement.scrollHeight; // Scroll to bottom
-    }
-
-    // Function to add an alert to the sidebar
-    function addAlertToSidebar(message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-danger alert-dismissible fade show'; // Added dismissible
-        alertDiv.setAttribute('role', 'alert');
-        alertDiv.innerText = message;
-
-        // Add close button
-        const closeButton = document.createElement('button');
-        closeButton.type = 'button';
-        closeButton.className = 'btn-close';
-        closeButton.setAttribute('data-bs-dismiss', 'alert');
-        closeButton.setAttribute('aria-label', 'Close');
-        alertDiv.appendChild(closeButton);
-
-        alertContainer.appendChild(alertDiv);
-        if (!alertSidebar.classList.contains('open')) {
-             toggleSidebar(); // Optionally open sidebar on new alert
-        }
-    }
-
-    // Fetch latest data for the selected interface
-    function fetchLatestData() {
-        if (!selectedInterface) return;
-
-        fetch(`/get_latest_data?interface=${encodeURIComponent(selectedInterface)}`)
-            .then(response => response.json())
-            .then(result => {
-                if (result.data && result.data.length > 0) {
-                    const latestData = result.data[0]; // Assuming endpoint returns latest
-                    const now = new Date(latestData.timestamp * 1000); // Convert Unix timestamp
-                    const timeLabel = now.toLocaleTimeString();
-                    const predictionLabel = latestData.predicted_label;
-
-                    // Log to the first terminal
-                    const logMessage = `${timeLabel} - Interface: ${selectedInterface} - Prediction: ${predictionLabel}`;
-                    addLog(terminal, logMessage, predictionLabel.toLowerCase() !== 'benign'); // Highlight if not benign
-
-                    // Add data to chart (using timestamp for label and a sequence/dummy value for Y)
-                    if (networkChart.data.labels.length > 30) { // Keep chart history limited
-                        networkChart.data.labels.shift();
-                        networkChart.data.datasets[0].data.shift();
-                    }
-                    networkChart.data.labels.push(timeLabel);
-                    // Using a simple sequence or timestamp for Y-axis value for now
-                    networkChart.data.datasets[0].data.push(latestData.timestamp);
-                    networkChart.update();
-
-                    // Add alert to sidebar if it's an attack
-                    if (predictionLabel.toLowerCase() !== 'benign') {
-                        addAlertToSidebar(`ALERT: ${predictionLabel} detected on ${selectedInterface} at ${timeLabel}`);
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching latest data:', error);
-                addLog(terminal, `Error fetching data for ${selectedInterface}: ${error}`);
-            });
-    }
-
-
-    // Fetch attack logs from the database
-    let lastLogTimestamp = null; // Keep track of the last log displayed
-
-    function fetchAttackLogs() {
-        fetch('/get_attack_logs')
-            .then(response => response.json())
-            .then(logs => {
-                if (!Array.isArray(logs) || logs.length === 0) return;
-
-                // Sort logs by timestamp just in case they aren't perfectly ordered
-                logs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-                const latestLog = logs[logs.length - 1];
-
-                // Only update if the latest log is newer than the last one shown
-                if (!lastLogTimestamp || new Date(latestLog.timestamp) > new Date(lastLogTimestamp)) {
-                     // Clear terminal 2 before adding new logs to avoid duplicates if needed
-                     // terminal2.innerHTML = ''; // Uncomment if you want to show only latest batch
-
-                    logs.forEach(log => {
-                         // Check if this specific log timestamp is newer than the last displayed overall timestamp
-                         if (!lastLogTimestamp || new Date(log.timestamp) > new Date(lastLogTimestamp)) {
-                            const isBenign = log.attack_type.toLowerCase() === 'benign'; // Assuming 'benign' means normal
-                            const logMessage = `${log.timestamp} - ${isBenign ? 'NORMAL' : 'ATTACK'}: ${log.attack_type} on ${log.interface} (Conf: ${log.confidence.toFixed(2)}%)`;
-                            addLog(terminal2, logMessage, !isBenign);
-                         }
-                    });
-                    lastLogTimestamp = latestLog.timestamp; // Update the timestamp of the latest displayed log
-                }
-            })
-            .catch(error => console.error('Error fetching attack logs:', error));
-    }
-
-
-    // Function to start monitoring and data fetching
-    // Add this function to manage the stream connection
-    function setupStreamConnection(interfaceName) {
+      // Remove PPS Chart initialization from setupStreamConnection function
+      function setupStreamConnection(interfaceName) {
         // Close existing stream if any
         if (eventSource) {
-            eventSource.close();
-            eventSource = null;
+          eventSource.close();
+          eventSource = null;
         }
-    
+
         if (!!window.EventSource) {
-            eventSource = new EventSource(`/stream_packets?interface=${encodeURIComponent(interfaceName)}`);
-            
-            eventSource.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    const timestamp = new Date(data.timestamp * 1000).toLocaleTimeString();
-                    const message = `${timestamp} - ${data.predicted_label} (Confidence: ${data.confidence}%)`;
-                    addLog(streamTerminal, message, data.predicted_label.toLowerCase() !== 'benign');
+          eventSource = new EventSource(
+            `/stream_packets?interface=${encodeURIComponent(interfaceName)}`
+          );
 
-                    // Add stream data to chart
-                    if (networkChart.data.labels.length > 30) { // Keep chart history limited
-                        networkChart.data.labels.shift();
-                        networkChart.data.datasets[0].data.shift();
-                    }
-                    networkChart.data.labels.push(timestamp);
-                    networkChart.data.datasets[0].data.push(data.timestamp);
-                    networkChart.update();
+          // Event handlers remain the same
+          eventSource.onmessage = function (event) {
+            try {
+              const data = JSON.parse(event.data);
+              const predictionLabel = data.predicted_label;
 
-                } catch (error) {
-                    console.error('Error parsing stream data:', error);
-                    addLog(streamTerminal, `Error parsing data: ${event.data}`, true);
-                }
-            };
-    
-            eventSource.onerror = function(e) {
-                addLog(streamTerminal, "Stream connection error. Attempting to reconnect...", true);
-                // The EventSource will automatically try to reconnect
-            };
-    
-            eventSource.onopen = function() {
-                addLog(streamTerminal, `Stream connected for interface: ${interfaceName}`);
-            };
+              // Get or assign numeric ID for this prediction label
+              if (!predictionLabelMap.has(predictionLabel)) {
+                predictionLabelMap.set(predictionLabel, nextLabelId++);
+              }
+              const labelId = predictionLabelMap.get(predictionLabel);
+
+              const message = `${new Date(
+                data.timestamp * 1000
+              ).toLocaleTimeString()} - ${predictionLabel} (Confidence: ${
+                data.confidence
+              }%)`;
+              addLog(
+                streamTerminal,
+                message,
+                predictionLabel.toLowerCase() !== "benign"
+              );
+
+              if (networkChart.data.datasets[0].data.length > 20) {
+                networkChart.data.datasets[0].data.shift();
+              }
+
+              networkChart.data.datasets[0].data.push({
+                x: data.timestamp * 1000, // Convert to milliseconds for the time scale
+                y: labelId,
+                label: predictionLabel,
+              });
+              networkChart.update();
+
+              // Update PPS Chart
+              if (ppsChart.data.datasets[0].data.length > 20) {
+                ppsChart.data.datasets[0].data.shift();
+              }
+              ppsChart.data.datasets[0].data.push({
+                x: data.timestamp * 1000,
+                y: data.pps,
+              });
+              ppsChart.update();
+            } catch (error) {
+              console.error("Error parsing stream data:", error);
+              addLog(streamTerminal, `Error parsing data: ${event.data}`, true);
+            }
+          };
+
+          eventSource.onerror = function (e) {
+            addLog(
+              streamTerminal,
+              "Stream connection error. Attempting to reconnect...",
+              true
+            );
+            // The EventSource will automatically try to reconnect
+          };
+
+          eventSource.onopen = function () {
+            addLog(
+              streamTerminal,
+              `Stream connected for interface: ${interfaceName}`
+            );
+          };
         }
-    }
-    
-    // Modify the startMonitoring function to include stream setup
-    function startMonitoring(interfaceName) {
+      }
+
+      function startMonitoring(interfaceName) {
         console.log(`Attempting to start monitoring on: ${interfaceName}`);
         selectedInterface = interfaceName;
-    
+
         // Clear previous data and intervals
         if (fetchDataInterval) clearInterval(fetchDataInterval);
         if (eventSource) {
-            eventSource.close();
-            eventSource = null;
+          eventSource.close();
+          eventSource = null;
         }
-        
-        terminal.innerHTML = '';
-        streamTerminal.innerHTML = ''; // Clear stream terminal
+
+        terminal.innerHTML = "";
+        streamTerminal.innerHTML = ""; // Clear stream terminal
         lastLogTimestamp = null;
-        networkChart.data.labels = [];
+        predictionLabelMap.clear();
+        nextLabelId = 1;
         networkChart.data.datasets[0].data = [];
+        ppsChart.data.datasets[0].data = [];
         networkChart.update();
-    
+        ppsChart.update();
+
         // Call the backend to start the monitoring process
-        fetch('/start_monitoring', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ interface: interfaceName }),
+        fetch("/start_monitoring", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ interface: interfaceName }),
         })
-        .then(response => response.json())
-        .then(data => {
+          .then((response) => response.json())
+          .then((data) => {
             console.log(data.message);
             addLog(terminal, `Monitoring started on ${interfaceName}.`);
             // Start fetching data periodically
@@ -437,53 +513,214 @@
             fetchLatestData();
             // Setup stream connection
             setupStreamConnection(interfaceName);
-        })
-        .catch(error => {
-            console.error('Error starting monitoring:', error);
-            addLog(terminal, `Error starting monitoring on ${interfaceName}: ${error}`, true);
+          })
+          .catch((error) => {
+            console.error("Error starting monitoring:", error);
+            addLog(
+              terminal,
+              `Error starting monitoring on ${interfaceName}: ${error}`,
+              true
+            );
             selectedInterface = null;
-        });
-    }
+          });
+      }
 
-    // Event listener for interface selection
-    interfaceSelect.addEventListener('change', function() {
+      // Add the missing fetchLatestData function
+      async function fetchLatestData() {
+        if (!selectedInterface) return;
+
+        try {
+          const response = await fetch(
+            `/get_latest_data?interface=${encodeURIComponent(
+              selectedInterface
+            )}`
+          );
+          const data = await response.json();
+
+          if (data.data && data.data.length > 0) {
+            const latest = data.data[data.data.length - 1];
+            addLog(
+              terminal,
+              `${new Date().toLocaleTimeString()} - ${
+                latest.predicted_label
+              } (Confidence: ${latest.confidence}%)`,
+              latest.predicted_label.toLowerCase() !== "benign"
+            );
+            if (latest.predicted_label.toLowerCase() !== "benign") {
+              const message = `${new Date().toLocaleTimeString()} - ${
+                latest.predicted_label
+              } attack detected! (Confidence: ${latest.confidence}%)`;
+              addAlertToSidebar(message, latest.predicted_label);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching latest data:", error);
+          addLog(
+            terminal,
+            "Error fetching latest data: " + error.message,
+            true
+          );
+        }
+      }
+
+      // Event listener for interface selection
+      interfaceSelect.addEventListener("change", function () {
         const selectedValue = this.value;
         if (selectedValue) {
-            startMonitoring(selectedValue);
+          startMonitoring(selectedValue);
         }
-    });
+      });
 
-    // Load interfaces when the page loads
-    document.addEventListener('DOMContentLoaded', () => {
-        fetch('/get_interfaces')
-            .then(response => response.json())
-            .then(data => {
-                interfaceSelect.innerHTML = '<option selected disabled value="">-- Select an Interface --</option>'; // Clear loading message
-                if (data.interfaces && data.interfaces.length > 0) {
-                    data.interfaces.forEach(iface => {
-                        const option = document.createElement('option');
-                        option.value = iface;
-                        option.textContent = iface;
-                        interfaceSelect.appendChild(option);
-                    });
-                } else {
-                    interfaceSelect.innerHTML = '<option selected disabled>No interfaces found</option>';
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching interfaces:', error);
-                interfaceSelect.innerHTML = '<option selected disabled>Error loading interfaces</option>';
+      async function fetchAttackLogs() {
+        try {
+          const response = await fetch("/get_attack_logs");
+          const data = await response.json();
+
+          if (data.logs && data.logs.length > 0) {
+            data.logs.forEach((log) => {
+              const message = `${new Date(
+                log.timestamp
+              ).toLocaleTimeString()} - ${
+                log.attack_type
+              } attack detected! (Confidence: ${log.confidence}%)`;
+              addAlertToSidebar(message, log.attack_type);
             });
+          }
+        } catch (error) {
+          console.error("Error fetching attack logs:", error);
+          addLog(
+            terminal2,
+            "Error fetching attack logs: " + error.message,
+            true
+          );
+        }
+      }
+
+      // Load interfaces when the page loads
+      document.addEventListener("DOMContentLoaded", () => {
+        fetch("/get_interfaces")
+          .then((response) => response.json())
+          .then((data) => {
+            interfaceSelect.innerHTML =
+              '<option selected disabled value="">-- Select an Interface --</option>'; // Clear loading message
+            if (data.interfaces && data.interfaces.length > 0) {
+              data.interfaces.forEach((iface) => {
+                const option = document.createElement("option");
+                option.value = iface;
+                option.textContent = iface;
+                interfaceSelect.appendChild(option);
+              });
+            } else {
+              interfaceSelect.innerHTML =
+                "<option selected disabled>No interfaces found</option>";
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching interfaces:", error);
+            interfaceSelect.innerHTML =
+              "<option selected disabled>Error loading interfaces</option>";
+          });
 
         // Start fetching attack logs periodically regardless of interface selection
         if (fetchAlertsInterval) clearInterval(fetchAlertsInterval); // Clear previous interval if any
         fetchAlertsInterval = setInterval(fetchAttackLogs, 5000); // Fetch attack logs every 5 seconds
         fetchAttackLogs(); // Initial fetch
-    });
+      });
 
-</script>
+      // Sound for alert
+      const alertAudio = new Audio("/static/assets/beep-warning.mp3");
 
-<!-- Bootstrap 5 JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
-</body>
+      // Preload the audio when the DOM is ready
+      document.addEventListener("DOMContentLoaded", function () {
+        alertAudio.load();
+      });
+
+      // Function to show a Bootstrap alert at the top right with animation
+      function showTopRightAlert(message, attackType) {
+        topRightAlertContainer.innerHTML = "";
+        const alertDiv = document.createElement("div");
+        alertDiv.className =
+          "alert alert-danger alert-dismissible fade show animate__animated animate__shakeX";
+        alertDiv.setAttribute("role", "alert");
+        // Bold the attack name
+        alertDiv.innerHTML = message.replace(
+          attackType,
+          `<strong>${attackType}</strong>`
+        );
+
+        const closeButton = document.createElement("button");
+        closeButton.type = "button";
+        closeButton.className = "btn-close";
+        closeButton.setAttribute("data-bs-dismiss", "alert");
+        closeButton.setAttribute("aria-label", "Close");
+        alertDiv.appendChild(closeButton);
+
+        topRightAlertContainer.appendChild(alertDiv);
+
+        // Play sound
+        alertAudio.currentTime = 0;
+        alertAudio.play();
+      }
+
+      // Function to add an alert to the sidebar or show as top-right alert
+      function addAlertToSidebar(message, attackType) {
+        const alertDiv = document.createElement("div");
+        alertDiv.className =
+          "alert alert-danger alert-dismissible fade show animate__animated animate__shakeX";
+        alertDiv.setAttribute("role", "alert");
+        // Bold the attack name
+        alertDiv.innerHTML = message.replace(
+          attackType,
+          `<strong>${attackType}</strong>`
+        );
+
+        const closeButton = document.createElement("button");
+        closeButton.type = "button";
+        closeButton.className = "btn-close";
+        closeButton.setAttribute("data-bs-dismiss", "alert");
+        closeButton.setAttribute("aria-label", "Close");
+        alertDiv.appendChild(closeButton);
+
+        // Insert at the top for descending order
+        if (alertContainer.firstChild) {
+          alertContainer.insertBefore(alertDiv, alertContainer.firstChild);
+        } else {
+          alertContainer.appendChild(alertDiv);
+        }
+
+        // Play sound and animate
+        alertAudio.currentTime = 0.2;
+        alertAudio.play();
+
+        // If sidebar is closed, show top-right alert
+        if (!alertSidebar.classList.contains("open")) {
+          showTopRightAlert(message, attackType);
+        }
+      }
+
+      // When sidebar is opened, close the Bootstrap alert
+      function toggleSidebar() {
+        alertSidebar.classList.toggle("open");
+        if (alertSidebar.classList.contains("open")) {
+          // Close Bootstrap alert when sidebar is opened
+          topRightAlertContainer.innerHTML = "";
+        }
+      }
+    </script>
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Bootstrap Alert Container (left bottom) -->
+    <div
+      id="topRightAlertContainer"
+      style="
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 2000;
+        min-width: 300px;
+      "
+    ></div>
+  </body>
 </html>
