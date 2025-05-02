@@ -1,24 +1,27 @@
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+
 import numpy as np
 import time
 import logging
 import threading
 import platform
 import subprocess
-import os
 import json
 import tensorflow as tf
 from flask import Flask, render_template, jsonify, request, Response
 from collections import defaultdict
-from db import get_db_connection, store_attack_details, get_latest_attack_logs # Import get_latest_attack_logs
+from db import get_db_connection, store_attack_details, get_latest_attack_logs
 from capture import capture_traffic, convert_pcap
 from predict import preprocess_flow, predict_attack, get_label_mapping
 from utils import get_latest_pcap, get_latest_csv
 
 # Constants for monitoring
-CAPTURE_DURATION = 20
+CAPTURE_DURATION = 10
 MONITORING_INTERVAL = 5
-CLEANUP_INTERVAL = 3600
-MAX_FILES_KEPT = 50
+CLEANUP_INTERVAL = 60
+MAX_FILES_KEPT = 10
 
 # Setup logging
 logging.basicConfig(
@@ -31,7 +34,7 @@ logging.basicConfig(
 )
 
 # Initialize db
-connection = get_db_connection()
+# connection = get_db_connection()
 
 # Load the models
 dl_model = tf.keras.models.load_model('lib/deep_learning_model.h5')
@@ -68,13 +71,13 @@ def get_interfaces():
         for line in stdout.splitlines():
             line = line.strip()
             if line:
-                if not line.startswith(' ') and ':' in line:
-                    current_adapter = line.split(':')[0].strip()
-                    if ('Loopback' not in current_adapter and 
-                        'Virtual' not in current_adapter and 
-                        'Pseudo' not in current_adapter and
-                        '*' not in current_adapter):
-                        nics.append(current_adapter)
+                if line.endswith(':'):
+                    current_adapter = line[:-1].strip()
+                    if (not any(x in current_adapter for x in [
+                        'Loopback', 'Virtual', 'Pseudo', '*', 'vEthernet', 'Bluetooth'
+                    ]) and 'adapter' in current_adapter):
+                        adapter_name = current_adapter.split('adapter ')[-1].strip()
+                        nics.append(adapter_name)
     else:
         logging.error(f"Unsupported OS: {os_type}")
         exit(1)
@@ -127,7 +130,7 @@ def monitor_network(interface):
                         interface_data[interface].append({
                             'timestamp': current_time,
                             'pps': pps,
-                            'predicted_label': 'Analyzing...'  # Placeholder until ML prediction
+                            'predicted_label': 'Benign'  # Placeholder until ML prediction
                         })
                         
                         if len(interface_data[interface]) > MAX_FILES_KEPT:
@@ -153,6 +156,7 @@ def monitor_network(interface):
                 logging.info(f"Processing flow file: {flow_file}")
                 try:
                     X = preprocess_flow(flow_file)
+                    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
                     pred_label, pred_probs = predict_attack(X, dl_model)
                     
                     for i, (label, prob) in enumerate(zip(pred_label, pred_probs)):
@@ -172,15 +176,15 @@ def monitor_network(interface):
                         
                         if confidence > 90 and str.lower(attack_type) != "benign":
                             logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
-                            store_attack_details(
-                                connection=connection,
-                                attack_type=attack_type,
-                                confidence=confidence,
-                                interface=interface,
-                                timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),
-                                source_ip="Unknown",
-                                dest_ip="Unknown"
-                            )
+                            # store_attack_details(
+                            #     connection=connection,
+                            #     attack_type=attack_type,
+                            #     confidence=confidence,
+                            #     interface=interface,
+                            #     timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),
+                            #     source_ip="Unknown",
+                            #     dest_ip="Unknown"
+                            # )
                         
                 except Exception as e:
                     logging.error(f"Error during prediction: {e}")
@@ -204,6 +208,12 @@ def cleanup_thread():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/assets/<path:filename>')
+def serve_static(filename):
+    logging.info(f"Serving static file: {os.path.join('templates/assets', filename)}")
+    
+    return app.send_static_file(os.path.join('./templates/assets', filename))
 
 @app.route('/get_interfaces')
 def get_interfaces_route():
@@ -240,7 +250,8 @@ def get_latest_data():
 
 @app.route('/get_attack_logs')
 def get_attack_logs_route():
-    logs = get_latest_attack_logs(connection)
+    # logs = get_latest_attack_logs(connection)
+    logs = []
     log_list = []
     if logs:
         for log in logs:
@@ -258,8 +269,9 @@ def get_attack_logs_route():
 
 @app.route('/stream_packets')
 def stream_packets():
-    def generate():
-        interface = request.args.get('interface')
+    interface = request.args.get('interface')  # Extract at the start
+
+    def generate(interface):
         if not interface:
             yield f"data: {json.dumps({'error': 'No interface specified'})}\n\n"
             return
@@ -273,7 +285,6 @@ def stream_packets():
                     if latest_data['timestamp'] > last_streamed_timestamp:
                         yield f"data: {json.dumps(latest_data)}\n\n"
                         last_streamed_timestamp = latest_data['timestamp']
-                # Check for new data every second (adjust as needed)
                 time.sleep(1)
         except GeneratorExit:
             logging.info(f"Client disconnected from stream for interface {interface}")
@@ -281,7 +292,7 @@ def stream_packets():
             logging.error(f"Error in stream for interface {interface}: {e}")
             yield f"data: {json.dumps({'error': f'Stream error: {e}'})}\n\n"
 
-    return Response(generate(), mimetype='text/event-stream')
+    return Response(generate(interface), mimetype='text/event-stream')
 
 
 if __name__ == '__main__':
