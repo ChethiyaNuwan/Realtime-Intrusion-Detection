@@ -1,8 +1,15 @@
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', message='.*Trying to unpickle estimator.*')
+
 import pandas as pd
 import joblib
 import numpy as np
 import tensorflow as tf
-import os
 from utils import get_latest_csv
 
 def preprocess_flow(flow_file):
@@ -16,7 +23,18 @@ def preprocess_flow(flow_file):
     preprocessors = joblib.load('lib/preprocessors.pkl')
     
     df = pd.read_csv(flow_file)
+    
+    if df.empty:
+        raise ValueError(f"Flow file {flow_file} is empty. No network traffic captured.")
+        
+    missing_cols = [col for col in preprocessors['dropped_cols'] if col in df.columns]
+    if not missing_cols:
+        raise ValueError(f"Flow file {flow_file} does not contain expected columns. Please check CICFlowMeter output.")
+    
     df = df.drop(columns=preprocessors['dropped_cols'] + ['Label'], errors='ignore')
+    
+    if df.empty:
+        raise ValueError("No data remains after preprocessing. Please check flow file format.")
     
     X = preprocessors['imputer'].transform(df)
     X = preprocessors['constant_filter'].transform(X)
@@ -44,7 +62,7 @@ def predict_attack(X, model):
         X (numpy.ndarray): Preprocessed features
     Returns:
         tuple: (predicted_label, prediction_probabilities)
-    """
+    """     
     pred_probs = model.predict(X)
     pred_label = pred_probs.argmax(axis=1)
     
