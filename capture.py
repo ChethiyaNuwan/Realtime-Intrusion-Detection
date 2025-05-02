@@ -92,7 +92,7 @@ if __name__ == "__main__":
     pcap_file = os.path.join(pcap_dir, f"capture_{timestamp}.pcap")
     
     capture_duration = 10
-    interface = "Ethernet 2"
+    interface = None
     
     print(f"Starting packet capture for {capture_duration} seconds...")
     capture_process = capture_traffic(interface, capture_duration, pcap_file)
