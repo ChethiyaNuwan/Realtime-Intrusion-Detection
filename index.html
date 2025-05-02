@@ -130,18 +130,30 @@
 
 <!-- Sidebar for Alerts -->
 <div class="sidebar" id="alertSidebar">
-   
+    <!-- <h5 class="text-end"><i class="fas fa-bell"></i> Alerts</h5> -->
     <div id="alertContainer">
         <!-- Alerts will be dynamically added here -->
     </div>
 </div>
 
 <!-- Button to toggle sidebar -->
-<button class="toggle-sidebar" onclick="toggleSidebar()">Alerts</button>
+<button class="toggle-sidebar border" onclick="toggleSidebar()">Alerts</button>
 
 <!-- Main Content -->
 <div class="container my-5">
     <h2 class="text-center mb-4"> Network Traffic Analysis </h2>
+
+    <!-- Interface Selector and Button Row -->
+    <div class="row justify-content-center align-items-center mb-4">
+        <div class="col-md-8 d-flex align-items-center">
+            <label for="interfaceSelect" class="form-label mb-0 me-2 text-nowrap">Select Network Interface:</label>
+            <select class="form-select" id="interfaceSelect" style="min-width:220px;">
+                <option selected disabled>Loading interfaces...</option>
+                <!-- Interfaces will be populated here by JavaScript -->
+            </select>
+        </div>
+    </div>
+
 
     <div id="charts-container" class="row">
         <div class="col-12">
@@ -151,15 +163,25 @@
         </div>
     </div>
 
-    <!-- Terminal-like div for packet scanning updates -->
-   <div class="terminal" id="terminal"></div>
-   <h2 class="text-center mb-4">Real-Time Threat Notice </h2>
+    <!-- Terminal-like div for prediction updates -->
+    <h4 class="text-center mb-3 mt-4">Prediction Log</h4>
+    <div class="terminal" id="terminal">
+        <!-- Prediction updates will be dynamically appended here -->
+    </div>
+
+    <!-- Terminal-like div for attack logs -->
+    <h4 class="text-center mb-3 mt-4">Real-Time Attack Notice </h4>
     <div class="terminal" id="terminal2">
-        <!-- Packet scanning updates will be dynamically appended here -->
+        <!-- Attack logs will be dynamically appended here -->
+    </div>
+
+    <!-- New Terminal-like div for real-time stream -->
+    <h4 class="text-center mb-3 mt-4">Real-Time Data Stream</h4>
+    <div class="terminal" id="streamTerminal">
+        <!-- Streamed data will be dynamically appended here -->
     </div>
 </div>
 
-<!-- ################################################################################################################################ -->
 <!-- Footer -->
 <footer class="footer">
     <p>&copy; 2025 Real Time Threat Monitoring and Detection Dashboard @ All rights reserved.</p>
@@ -169,117 +191,298 @@
     const ctx = document.getElementById('networkChart').getContext('2d');
     const terminal = document.getElementById('terminal');
     const terminal2 = document.getElementById('terminal2');
+    const streamTerminal = document.getElementById('streamTerminal');
     const alertSidebar = document.getElementById('alertSidebar');
     const alertContainer = document.getElementById('alertContainer');
+    const interfaceSelect = document.getElementById('interfaceSelect');
+
+    let selectedInterface = null;
+    let fetchDataInterval = null;
+    let fetchAlertsInterval = null; 
+    let eventSource = null;
 
     // Function to toggle the sidebar
     function toggleSidebar() {
         alertSidebar.classList.toggle('open');
     }
 
-    // Chart setup
+    // Chart setup (Label changed)
     const networkChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
             datasets: [{
-                label: 'Packets per Second',
-                data: [],
+                label: 'Predictions Over Time', // Changed Label
+                data: [], // Data will be timestamps or sequence numbers
                 borderColor: 'rgba(0, 200, 81, 1)',
                 backgroundColor: 'rgba(0, 200, 81, 0.2)',
                 fill: true,
                 borderWidth: 2,
+                // We might need a way to visualize labels on the chart,
+                // perhaps using annotations or different point colors.
+                // For now, it just plots points over time.
             }]
         },
         options: {
             scales: {
                 x: { title: { display: true, text: 'Time' } },
-                y: { title: { display: true, text: 'Packets per Second' }, min: 0 }
+                y: {
+                    title: { display: true, text: 'Prediction Sequence' }, // Changed Label
+                    ticks: {
+                        // Hide Y-axis labels as they don't represent a quantity now
+                        callback: function(value, index, values) {
+                            return ''; // Return empty string to hide labels
+                        }
+                    }
+                 }
             },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        // Potentially customize tooltip later to show label
+                    }
+                }
+            }
         }
     });
 
-    // Simulated real-time data update
-    function updateChart() {
-        const now = new Date();
-        const timeLabel = now.toLocaleTimeString();
-        const dateLabel = now.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-        const pps = Math.floor(Math.random() * 100) + 1; // Simulated packets per second
-
-        // Add new data to chart
-        if (networkChart.data.labels.length > 20) {
-            networkChart.data.labels.shift();
-            networkChart.data.datasets[0].data.shift();
+    // Function to add a log message to a terminal
+    function addLog(termElement, message, isAlert = false) {
+        const div = document.createElement('div');
+        if (isAlert) {
+            div.style.color = 'red'; // Highlight alerts
+            div.style.fontWeight = 'bold';
         }
-
-        networkChart.data.labels.push(timeLabel);
-        networkChart.data.datasets[0].data.push(pps);
-        networkChart.update();
-
-        // Log updates to terminal
-        if (pps > 80) { // Example threshold for anomaly
-            const alert = `ALERT: High traffic detected (${pps} PPS) on ${dateLabel} at ${timeLabel}`;
-            terminal.innerHTML += `<div>${alert}</div>`;
-            addAlert(alert);
-        } else {
-            terminal.innerHTML += `<div>${timeLabel} - Monitoring: ${pps} packets per second</div>`;
-        }
-
-        terminal.scrollTop = terminal.scrollHeight; // Scroll terminal to bottom
+        // Sanitize message before setting innerText to prevent potential XSS
+        // (Although innerText usually handles this, explicit check is safer)
+        const safeMessage = String(message).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        div.innerText = safeMessage;
+        termElement.appendChild(div);
+        termElement.scrollTop = termElement.scrollHeight; // Scroll to bottom
     }
 
     // Function to add an alert to the sidebar
-    function addAlert(message) {
+    function addAlertToSidebar(message) {
         const alertDiv = document.createElement('div');
-        alertDiv.className = 'alert alert-danger';
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show'; // Added dismissible
+        alertDiv.setAttribute('role', 'alert');
         alertDiv.innerText = message;
+
+        // Add close button
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close';
+        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        closeButton.setAttribute('aria-label', 'Close');
+        alertDiv.appendChild(closeButton);
+
         alertContainer.appendChild(alertDiv);
+        if (!alertSidebar.classList.contains('open')) {
+             toggleSidebar(); // Optionally open sidebar on new alert
+        }
     }
 
-    setInterval(updateChart, 1000); // Update every second
-</script>
-<script>
+    // Fetch latest data for the selected interface
+    function fetchLatestData() {
+        if (!selectedInterface) return;
 
-function fetchAlerts() {
-    fetch('/api/alerts')
-        .then(response => response.json())  // Correctly process API response
-        .then(data => {
-            if (data.length === 0) return; // Exit if there are no alerts
+        fetch(`/get_latest_data?interface=${encodeURIComponent(selectedInterface)}`)
+            .then(response => response.json())
+            .then(result => {
+                if (result.data && result.data.length > 0) {
+                    const latestData = result.data[0]; // Assuming endpoint returns latest
+                    const now = new Date(latestData.timestamp * 1000); // Convert Unix timestamp
+                    const timeLabel = now.toLocaleTimeString();
+                    const predictionLabel = latestData.predicted_label;
 
-            const terminal2 = document.getElementById('terminal2'); // Ensure terminal exists
-            if (!terminal2) {
-                console.error("Terminal2 element not found!");
-                return;
-            }
+                    // Log to the first terminal
+                    const logMessage = `${timeLabel} - Interface: ${selectedInterface} - Prediction: ${predictionLabel}`;
+                    addLog(terminal, logMessage, predictionLabel.toLowerCase() !== 'benign'); // Highlight if not benign
 
-            // Get the latest alert (last item in the data array)
-            const latestAlert = data[data.length - 1];
+                    // Add data to chart (using timestamp for label and a sequence/dummy value for Y)
+                    if (networkChart.data.labels.length > 30) { // Keep chart history limited
+                        networkChart.data.labels.shift();
+                        networkChart.data.datasets[0].data.shift();
+                    }
+                    networkChart.data.labels.push(timeLabel);
+                    // Using a simple sequence or timestamp for Y-axis value for now
+                    networkChart.data.datasets[0].data.push(latestData.timestamp);
+                    networkChart.update();
 
-            // Determine if it's an attack or normal
-            const isBenign = latestAlert.label.toLowerCase() === 'normal';
+                    // Add alert to sidebar if it's an attack
+                    if (predictionLabel.toLowerCase() !== 'benign') {
+                        addAlertToSidebar(`ALERT: ${predictionLabel} detected on ${selectedInterface} at ${timeLabel}`);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching latest data:', error);
+                addLog(terminal, `Error fetching data for ${selectedInterface}: ${error}`);
+            });
+    }
 
-            // Get current time
-            const now = new Date();
-            const timeLabel = now.toLocaleTimeString();
 
-            // Append message to terminal
-            terminal2.innerHTML += `<div>${timeLabel} - ${isBenign ? 'NORMAL' : 'ATTACK'}: ${latestAlert.label} on ${latestAlert.interface}</div>`;
+    // Fetch attack logs from the database
+    let lastLogTimestamp = null; // Keep track of the last log displayed
+
+    function fetchAttackLogs() {
+        fetch('/get_attack_logs')
+            .then(response => response.json())
+            .then(logs => {
+                if (!Array.isArray(logs) || logs.length === 0) return;
+
+                // Sort logs by timestamp just in case they aren't perfectly ordered
+                logs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+                const latestLog = logs[logs.length - 1];
+
+                // Only update if the latest log is newer than the last one shown
+                if (!lastLogTimestamp || new Date(latestLog.timestamp) > new Date(lastLogTimestamp)) {
+                     // Clear terminal 2 before adding new logs to avoid duplicates if needed
+                     // terminal2.innerHTML = ''; // Uncomment if you want to show only latest batch
+
+                    logs.forEach(log => {
+                         // Check if this specific log timestamp is newer than the last displayed overall timestamp
+                         if (!lastLogTimestamp || new Date(log.timestamp) > new Date(lastLogTimestamp)) {
+                            const isBenign = log.attack_type.toLowerCase() === 'benign'; // Assuming 'benign' means normal
+                            const logMessage = `${log.timestamp} - ${isBenign ? 'NORMAL' : 'ATTACK'}: ${log.attack_type} on ${log.interface} (Conf: ${log.confidence.toFixed(2)}%)`;
+                            addLog(terminal2, logMessage, !isBenign);
+                         }
+                    });
+                    lastLogTimestamp = latestLog.timestamp; // Update the timestamp of the latest displayed log
+                }
+            })
+            .catch(error => console.error('Error fetching attack logs:', error));
+    }
+
+
+    // Function to start monitoring and data fetching
+    // Add this function to manage the stream connection
+    function setupStreamConnection(interfaceName) {
+        // Close existing stream if any
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+    
+        if (!!window.EventSource) {
+            eventSource = new EventSource(`/stream_packets?interface=${encodeURIComponent(interfaceName)}`);
             
-            // Auto-scroll to the latest log
-            terminal2.scrollTop = terminal2.scrollHeight;
-        })
-        .catch(error => console.error('Error fetching alerts:', error));
-}
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    const timestamp = new Date(data.timestamp * 1000).toLocaleTimeString();
+                    const message = `${timestamp} - ${data.predicted_label} (Confidence: ${data.confidence}%)`;
+                    addLog(streamTerminal, message, data.predicted_label.toLowerCase() !== 'benign');
 
-// Refresh alerts every 3 seconds
-setInterval(fetchAlerts, 1000);
+                    // Add stream data to chart
+                    if (networkChart.data.labels.length > 30) { // Keep chart history limited
+                        networkChart.data.labels.shift();
+                        networkChart.data.datasets[0].data.shift();
+                    }
+                    networkChart.data.labels.push(timestamp);
+                    networkChart.data.datasets[0].data.push(data.timestamp);
+                    networkChart.update();
+
+                } catch (error) {
+                    console.error('Error parsing stream data:', error);
+                    addLog(streamTerminal, `Error parsing data: ${event.data}`, true);
+                }
+            };
+    
+            eventSource.onerror = function(e) {
+                addLog(streamTerminal, "Stream connection error. Attempting to reconnect...", true);
+                // The EventSource will automatically try to reconnect
+            };
+    
+            eventSource.onopen = function() {
+                addLog(streamTerminal, `Stream connected for interface: ${interfaceName}`);
+            };
+        }
+    }
+    
+    // Modify the startMonitoring function to include stream setup
+    function startMonitoring(interfaceName) {
+        console.log(`Attempting to start monitoring on: ${interfaceName}`);
+        selectedInterface = interfaceName;
+    
+        // Clear previous data and intervals
+        if (fetchDataInterval) clearInterval(fetchDataInterval);
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+        
+        terminal.innerHTML = '';
+        streamTerminal.innerHTML = ''; // Clear stream terminal
+        lastLogTimestamp = null;
+        networkChart.data.labels = [];
+        networkChart.data.datasets[0].data = [];
+        networkChart.update();
+    
+        // Call the backend to start the monitoring process
+        fetch('/start_monitoring', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ interface: interfaceName }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data.message);
+            addLog(terminal, `Monitoring started on ${interfaceName}.`);
+            // Start fetching data periodically
+            fetchDataInterval = setInterval(fetchLatestData, 3000);
+            fetchLatestData();
+            // Setup stream connection
+            setupStreamConnection(interfaceName);
+        })
+        .catch(error => {
+            console.error('Error starting monitoring:', error);
+            addLog(terminal, `Error starting monitoring on ${interfaceName}: ${error}`, true);
+            selectedInterface = null;
+        });
+    }
+
+    // Event listener for interface selection
+    interfaceSelect.addEventListener('change', function() {
+        const selectedValue = this.value;
+        if (selectedValue) {
+            startMonitoring(selectedValue);
+        }
+    });
+
+    // Load interfaces when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/get_interfaces')
+            .then(response => response.json())
+            .then(data => {
+                interfaceSelect.innerHTML = '<option selected disabled value="">-- Select an Interface --</option>'; // Clear loading message
+                if (data.interfaces && data.interfaces.length > 0) {
+                    data.interfaces.forEach(iface => {
+                        const option = document.createElement('option');
+                        option.value = iface;
+                        option.textContent = iface;
+                        interfaceSelect.appendChild(option);
+                    });
+                } else {
+                    interfaceSelect.innerHTML = '<option selected disabled>No interfaces found</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching interfaces:', error);
+                interfaceSelect.innerHTML = '<option selected disabled>Error loading interfaces</option>';
+            });
+
+        // Start fetching attack logs periodically regardless of interface selection
+        if (fetchAlertsInterval) clearInterval(fetchAlertsInterval); // Clear previous interval if any
+        fetchAlertsInterval = setInterval(fetchAttackLogs, 5000); // Fetch attack logs every 5 seconds
+        fetchAttackLogs(); // Initial fetch
+    });
 
 </script>
+
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
