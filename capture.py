@@ -6,15 +6,7 @@ from utils import get_latest_pcap
 
 def capture_traffic(interface=None, duration=None, output_file=None):
     """
-    Capture network traffic using tshark
-    Args:
-        interface (str): Network interface to capture traffic from
-        duration (int): Duration in seconds to capture traffic (None for continuous)
-        output_file (str): Path to save the captured packets in PCAP format
-    Returns:
-        subprocess.Popen: The tshark process object, or None if capture fails
-    Raises:
-        Exception: If tshark command fails to execute
+    Capture network traffic using tshark with real-time output
     """
     command = ["tshark", "-l"]
     
@@ -28,12 +20,15 @@ def capture_traffic(interface=None, duration=None, output_file=None):
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         command.extend(["-F", "pcap", "-w", output_file])
     
+    command.extend(["-T", "fields", "-E", "separator=,", "-e", "frame.time", "-e", "ip.src", "-e", "ip.dst", "-e", "frame.len"])
+    
     try:
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            bufsize=1
         )
         error = process.stderr.readline()
         if error and "error" in error.lower():
