@@ -1,7 +1,9 @@
 import mysql.connector
 from mysql.connector import Error
+import logging
 
 def get_db_connection():
+    connection = None
     try:
         connection = mysql.connector.connect(
             host='localhost',
@@ -25,13 +27,17 @@ def get_db_connection():
             )
             """
             cursor.execute(create_table_query)
+            cursor.close()
             return connection
     except Error as e:
-        print(f"Error connecting to MySQL: {e}")
+        logging.error(f"Error connecting to MySQL: {e}")
+        if connection and connection.is_connected():
+            connection.close()
         return None
 
 def store_attack_details(connection, attack_type, confidence, interface, timestamp, source_ip, dest_ip): 
     """Store attack details in MySQL database"""
+    cursor = None
     try:
         cursor = connection.cursor()
         
@@ -44,10 +50,15 @@ def store_attack_details(connection, attack_type, confidence, interface, timesta
         
     except mysql.connector.Error as e:
         logging.error(f"Database error: {e}")
-
+        if connection.is_connected():
+            connection.rollback()
+    finally:
+        if cursor:
+            cursor.close()
 
 def get_latest_attack_logs(connection):
     """Retrieve the latest 10 attack logs from MySQL database"""
+    cursor = None
     try:
         cursor = connection.cursor()
 
@@ -62,3 +73,7 @@ def get_latest_attack_logs(connection):
         return logs
     except mysql.connector.Error as e:
         logging.error(f"Database error: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
