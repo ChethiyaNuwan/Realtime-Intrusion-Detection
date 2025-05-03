@@ -10,6 +10,7 @@ import pandas as pd
 import joblib
 import numpy as np
 import tensorflow as tf
+import re
 from utils import get_latest_csv
 
 def preprocess_flow(flow_file):
@@ -35,6 +36,21 @@ def preprocess_flow(flow_file):
     
     if df.empty:
         raise ValueError("No data remains after preprocessing. Please check flow file format.")
+    
+    # Remove rows with infinity values
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna()
+    
+    if df.empty:
+        raise ValueError("No data remains after removing infinite values.")
+    
+    # Handle extremely large values by clipping them to reasonable limits
+    # Calculate percentile-based limits to avoid outlier influence
+    upper_limits = df.quantile(0.99)
+    lower_limits = df.quantile(0.01)
+    
+    # Clip values to within these limits
+    df = df.clip(lower=lower_limits, upper=upper_limits, axis=1)
     
     X = preprocessors['imputer'].transform(df)
     X = preprocessors['constant_filter'].transform(X)
