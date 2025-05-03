@@ -20,7 +20,16 @@ def capture_traffic(interface=None, duration=None, output_file=None):
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         command.extend(["-F", "pcap", "-w", output_file])
     
-    command.extend(["-T", "fields", "-E", "separator=,", "-e", "frame.time", "-e", "ip.src", "-e", "ip.dst", "-e", "frame.len"])
+    command.extend([
+        "-T", "fields", 
+        "-E", "separator=,",
+        "-e", "frame.time", 
+        "-e", "ip.src", 
+        "-e", "ip.dst",
+        "-e", "_ws.col.Protocol",  # Protocol name (like TCP, UDP, ICMP)
+        "-e", "ip.proto",          # Protocol number
+        "-e", "frame.len"          # Packet length
+    ])
     
     try:
         process = subprocess.Popen(
