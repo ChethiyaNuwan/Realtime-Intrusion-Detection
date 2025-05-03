@@ -211,12 +211,6 @@
         <!-- Prediction updates will be dynamically appended here -->
       </div>
 
-      <!-- Terminal-like div for attack logs -->
-      <h4 class="text-center mb-3 mt-4">Real-Time Attack Notice</h4>
-      <div class="terminal" id="terminal2">
-        <!-- Attack logs will be dynamically appended here -->
-      </div>
-
       <!-- New Terminal-like div for real-time stream -->
       <h4 class="text-center mb-3 mt-4">Real-Time Data Stream</h4>
       <div class="terminal" id="streamTerminal">
@@ -381,6 +375,9 @@
                 },
               },
             },
+            legend: {
+              display: false,
+            },
           },
         },
       });
@@ -412,45 +409,26 @@
           eventSource.onmessage = function (event) {
             try {
               const data = JSON.parse(event.data);
-              const predictionLabel = data.predicted_label;
+              
+              // Format packet details for display with proper field validation
+              const timestamp = new Date(data.timestamp*1000).toLocaleTimeString() || 'Unknown';
+              const source = data.source || 'Unknown';
+              const destination = data.destination || 'Unknown';
+              const protocol = data.protocol || 'Unknown';
+              const length = data.length || '0';
+              
+              // Create fixed-width format string
+              const formattedTimestamp = `[${timestamp}]`.padEnd(15);
+              const formattedSource = `Source: ${source}`.padEnd(25);
+              const formattedDest = `→ Dest: ${destination}`.padEnd(25);
+              const formattedProtocol = `| Protocol: ${protocol}`.padEnd(20);
+              const formattedLength = `| Length: ${length.toString().padStart(5)} bytes`;
+              
+              const packetDetails = `${formattedTimestamp}${formattedSource}${formattedDest}${formattedProtocol}${formattedLength}`;
+              
+              // Add packet details to stream terminal
+              addLog(streamTerminal, packetDetails);
 
-              // Get or assign numeric ID for this prediction label
-              if (!predictionLabelMap.has(predictionLabel)) {
-                predictionLabelMap.set(predictionLabel, nextLabelId++);
-              }
-              const labelId = predictionLabelMap.get(predictionLabel);
-
-              const message = `${new Date(
-                data.timestamp * 1000
-              ).toLocaleTimeString()} - ${predictionLabel} (Confidence: ${
-                data.confidence
-              }%)`;
-              addLog(
-                streamTerminal,
-                message,
-                predictionLabel.toLowerCase() !== "benign"
-              );
-
-              if (networkChart.data.datasets[0].data.length > 20) {
-                networkChart.data.datasets[0].data.shift();
-              }
-
-              networkChart.data.datasets[0].data.push({
-                x: data.timestamp * 1000, // Convert to milliseconds for the time scale
-                y: labelId,
-                label: predictionLabel,
-              });
-              networkChart.update();
-
-              // Update PPS Chart
-              if (ppsChart.data.datasets[0].data.length > 20) {
-                ppsChart.data.datasets[0].data.shift();
-              }
-              ppsChart.data.datasets[0].data.push({
-                x: data.timestamp * 1000,
-                y: data.pps,
-              });
-              ppsChart.update();
             } catch (error) {
               console.error("Error parsing stream data:", error);
               addLog(streamTerminal, `Error parsing data: ${event.data}`, true);
@@ -463,7 +441,6 @@
               "Stream connection error. Attempting to reconnect...",
               true
             );
-            // The EventSource will automatically try to reconnect
           };
 
           eventSource.onopen = function () {
@@ -509,7 +486,7 @@
             console.log(data.message);
             addLog(terminal, `Monitoring started on ${interfaceName}.`);
             // Start fetching data periodically
-            fetchDataInterval = setInterval(fetchLatestData, 3000);
+            fetchDataInterval = setInterval(fetchLatestData, 2000);
             fetchLatestData();
             // Setup stream connection
             setupStreamConnection(interfaceName);
@@ -525,7 +502,6 @@
           });
       }
 
-      // Add the missing fetchLatestData function
       async function fetchLatestData() {
         if (!selectedInterface) return;
 
@@ -539,15 +515,49 @@
 
           if (data.data && data.data.length > 0) {
             const latest = data.data[data.data.length - 1];
+            
+            // Update PPS Chart
+            ppsChart.data.datasets[0].data.push({
+              x: new Date().getTime(), // Convert to milliseconds for Chart.js
+              y: latest.pps
+            });
+
+            // Keep only last 30 data points for better visualization
+            if (ppsChart.data.datasets[0].data.length > 30) {
+              ppsChart.data.datasets[0].data.shift();
+            }
+            ppsChart.update();
+
+            // Update Network Chart (Scatter Plot)
+            const label = latest.predicted_label;
+            if (!predictionLabelMap.has(label)) {
+              predictionLabelMap.set(label, nextLabelId++);
+            }
+            
+            networkChart.data.datasets[0].data.push({
+              x: new Date().getTime(),
+              y: predictionLabelMap.get(label),
+              label: label
+            });
+
+            // Keep last 100 data points for attack detection visualization
+            if (networkChart.data.datasets[0].data.length > 30) {
+              networkChart.data.datasets[0].data.shift();
+            }
+            networkChart.update();
+
+            // Add log entry for prediction
             addLog(
               terminal,
-              `${new Date().toLocaleTimeString()} - ${
+              `${new Date().toLocaleTimeString()} ${
                 latest.predicted_label
               } (Confidence: ${latest.confidence}%)`,
               latest.predicted_label.toLowerCase() !== "benign"
             );
+
+            // Add alert if it's an attack
             if (latest.predicted_label.toLowerCase() !== "benign") {
-              const message = `${new Date().toLocaleTimeString()} - ${
+              const message = `${new Date(latest.timestamp * 1000).toLocaleTimeString()} - ${
                 latest.predicted_label
               } attack detected! (Confidence: ${latest.confidence}%)`;
               addAlertToSidebar(message, latest.predicted_label);
