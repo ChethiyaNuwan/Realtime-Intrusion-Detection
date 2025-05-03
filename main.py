@@ -42,6 +42,8 @@ label_mapping = get_label_mapping()
 
 # Global variables to store state
 interface_data = defaultdict(list)
+packet_data = defaultdict(list) 
+attack_logs = defaultdict(list)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -98,7 +100,6 @@ def cleanup_old_files(directory, max_files):
     except Exception as e:
         logging.error(f"Error during cleanup: {e}")
 
-
 def monitor_network(interface):
     """Real-time network monitoring function"""
     while True:
@@ -122,7 +123,26 @@ def monitor_network(interface):
             while capture_process.poll() is None:
                 output = capture_process.stdout.readline()
                 if output:
-                    packet_count += 1
+                    try:
+                        # Parse packet details
+                        packet_info = output.strip().split(',')
+                        # Ensure we have all required fields
+                        if len(packet_info) >= 5:
+                            packet = {
+                                'timestamp': time.time(),
+                                'source': packet_info[3].strip(),
+                                'destination': packet_info[2].strip(),
+                                'protocol': packet_info[4].strip(),     # Protocol name (TCP, UDP, etc)
+                                'length': packet_info[5].strip()        # Packet length
+                            }
+                            packet_data[interface].append(packet)
+                            packet_count += 1
+                        else:
+                            logging.error(f"Incomplete packet data received: {output}")
+                        
+                    except Exception as e:
+                        logging.error(f"Error parsing packet data: {e}")
+                        
                     current_time = time.time()
                     time_diff = current_time - start_time
                     
@@ -130,8 +150,8 @@ def monitor_network(interface):
                         current_pps = packet_count / time_diff
                         interface_data[interface].append({
                             'timestamp': current_time,
-                            'pps': round(current_pps, 0),
-                            'predicted_label': 'Benign',  # Placeholder until ML prediction,
+                            'pps': int(current_pps),
+                            'predicted_label': 'Benign',
                             'confidence': 100
                         })
                         
@@ -158,7 +178,6 @@ def monitor_network(interface):
                 logging.info(f"Processing flow file: {flow_file}")
                 try:
                     X = preprocess_flow(flow_file)
-                    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
                     pred_label, pred_probs = predict_attack(X, dl_model)
                     
                     for i, (label, prob) in enumerate(zip(pred_label, pred_probs)):
@@ -167,9 +186,9 @@ def monitor_network(interface):
                         
                         interface_data[interface].append({
                             'timestamp': time.time(),
-                            'pps': round(current_pps, 0), 
+                            'pps': int(current_pps), 
                             'predicted_label': attack_type,
-                            'confidence': confidence
+                            'confidence': round(float(confidence), 2),
                         })
                         
                         if len(interface_data[interface]) > MAX_FILES_KEPT:
@@ -179,15 +198,19 @@ def monitor_network(interface):
                         
                         if confidence > 90 and str.lower(attack_type) != "benign":
                             logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
-                            # store_attack_details(
-                            #     connection=connection,
-                            #     attack_type=attack_type,
-                            #     confidence=confidence,
-                            #     interface=interface,
-                            #     timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),
-                            #     source_ip="Unknown",
-                            #     dest_ip="Unknown"
-                            # )
+
+                            attack_logs.append({
+                                'id': len(attack_logs) + 1,
+                                'attack_type': attack_type,
+                                'confidence': confidence,
+                                'interface': interface,
+                                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                                'source_ip': "Unknown",
+                                'dest_ip': "Unknown"
+                            })
+
+                            if len(attack_logs) > MAX_FILES_KEPT:
+                                attack_logs = attack_logs[-MAX_FILES_KEPT:]
                         
                 except Exception as e:
                     logging.error(f"Error during prediction: {e}")
@@ -211,12 +234,6 @@ def cleanup_thread():
 @app.route('/')
 def index():
     return render_template('index.html')
-
-@app.route('/assets/<path:filename>')
-def serve_static(filename):
-    logging.info(f"Serving static file: {os.path.join('templates/assets', filename)}")
-    
-    return app.send_static_file(os.path.join('./templates/assets', filename))
 
 @app.route('/get_interfaces')
 def get_interfaces_route():
@@ -248,47 +265,32 @@ def get_latest_data():
     if interface not in interface_data:
         return jsonify({'data': []})
 
-    data = interface_data[interface][-1:] if interface_data[interface] else []
+    # Convert numpy types to native Python types before serialization
+    data = interface_data[interface][-1:] if interface_data[interface] else []    
+    logging.info(f"Sending data for interface {interface}: {data}")
     return jsonify({'data': data})
 
 @app.route('/get_attack_logs')
 def get_attack_logs_route():
-    # logs = get_latest_attack_logs(connection)
-    logs = []
-    log_list = []
-    if logs:
-        for log in logs:
-            log_list.append({
-                'id': log[0],
-                'attack_type': log[1],
-                'confidence': log[2],
-                'interface': log[3],
-                'timestamp': log[4].strftime('%Y-%m-%d %H:%M:%S'), # Format datetime
-                'source_ip': log[5],
-                'dest_ip': log[6]
-            })
-    return jsonify(log_list)
+    return jsonify(attack_logs)
 
 
 @app.route('/stream_packets')
 def stream_packets():
-    interface = request.args.get('interface')  # Extract at the start
+    interface = request.args.get('interface')
 
     def generate(interface):
         if not interface:
             yield f"data: {json.dumps({'error': 'No interface specified'})}\n\n"
             return
 
-        last_streamed_timestamp = 0
         try:
             while True:
-                if interface in interface_data and interface_data[interface]:
-                    latest_data = interface_data[interface][-1] 
-                    # Only send if it's newer than the last one sent
-                    if latest_data['timestamp'] > last_streamed_timestamp:
-                        yield f"data: {json.dumps(latest_data)}\n\n"
-                        last_streamed_timestamp = latest_data['timestamp']
-                time.sleep(1)
+                if interface in packet_data and packet_data[interface]:
+                    # Get and remove the first packet
+                    packet = packet_data[interface].pop(0)
+                    yield f"data: {json.dumps(packet)}\n\n"
+                time.sleep(0.1)  # Small delay to prevent CPU overload
         except GeneratorExit:
             logging.info(f"Client disconnected from stream for interface {interface}")
         except Exception as e:
