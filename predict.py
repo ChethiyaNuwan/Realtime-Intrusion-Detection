@@ -39,7 +39,7 @@ def preprocess_flow(flow_file):
     
     # Remove rows with infinity values
     df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.dropna()
+    # df = df.dropna()
     
     if df.empty:
         raise ValueError("No data remains after removing infinite values.")
