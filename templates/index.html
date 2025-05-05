@@ -145,7 +145,7 @@
             >
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#"
+            <a class="nav-link" href="#" id="settingsBtn" data-bs-toggle="tooltip" data-bs-html="true"
               ><i class="fas fa-cogs"></i> Settings</a
             >
           </li>
@@ -157,6 +157,31 @@
         </ul>
       </div>
     </nav>
+
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Settings</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="ppsThreshold" class="form-label">PPS Threshold</label>
+              <input type="number" class="form-control" id="ppsThreshold" min="0" value="100">
+            </div>
+            <div class="mb-3">
+              <label for="confidenceThreshold" class="form-label">Confidence Threshold (%)</label>
+              <input type="number" class="form-control" id="confidenceThreshold" min="0" max="100" value="80">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" id="saveSettings">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Sidebar for Alerts -->
     <div class="sidebar" id="alertSidebar">
@@ -193,12 +218,12 @@
       </div>
 
       <div id="charts-container" class="row">
-        <div class="col-6">
+        <div class="col-12 mb-4">
           <div class="chart-card chart-container">
             <canvas id="ppsChart"></canvas>
           </div>
         </div>
-        <div class="col-6">
+        <div class="col-12">
           <div class="chart-card chart-container">
             <canvas id="networkChart"></canvas>
           </div>
@@ -240,6 +265,41 @@
       let fetchDataInterval = null;
       let fetchAlertsInterval = null;
       let eventSource = null;
+
+      let PPS_THRESHOLD = 100;
+      let CONFIDENCE_THRESHOLD = 80;
+
+      // Add this after other event listeners
+      document.getElementById('settingsBtn').addEventListener('click', function() {
+        const settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
+        document.getElementById('ppsThreshold').value = PPS_THRESHOLD;
+        document.getElementById('confidenceThreshold').value = CONFIDENCE_THRESHOLD;
+        settingsModal.show();
+      });
+
+      document.getElementById('saveSettings').addEventListener('click', function() {
+        const newPpsThreshold = parseInt(document.getElementById('ppsThreshold').value);
+        const newConfidenceThreshold = parseInt(document.getElementById('confidenceThreshold').value);
+        
+        if (isNaN(newPpsThreshold) || isNaN(newConfidenceThreshold)) {
+          alert('Please enter valid numbers');
+          return;
+        }
+        
+        if (newConfidenceThreshold < 0 || newConfidenceThreshold > 100) {
+          alert('Confidence threshold must be between 0 and 100');
+          return;
+        }
+        
+        PPS_THRESHOLD = newPpsThreshold;
+        CONFIDENCE_THRESHOLD = newConfidenceThreshold;
+        
+        // Update charts to reflect new thresholds
+        ppsChart.update();
+        
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+      });
 
       // Function to toggle the sidebar
       function toggleSidebar() {
@@ -292,14 +352,13 @@
               title: {
                 display: true,
                 text: "Time",
-              },
+              }
             },
             y: {
-              title: {
-                display: true,
-                text: "Attack Types",
-              },
+              min: 0,  // Set minimum value
+              suggestedMax: 5,  // Set suggested maximum value
               ticks: {
+                stepSize: 1,  // Force integer steps
                 callback: function (value) {
                   // Convert numeric value back to label for y-axis
                   for (let [label, id] of predictionLabelMap) {
@@ -308,6 +367,10 @@
                   return "";
                 },
               },
+              title: {
+                display: true,
+                text: "Attack Types",
+              }
             },
           },
           plugins: {
@@ -335,10 +398,22 @@
             {
               label: "Packets Per Second",
               data: [], // Will contain {x: timestamp, y: pps}
-              borderColor: "rgba(75, 192, 192, 1)",
-              backgroundColor: "rgba(75, 192, 192, 0.2)",
+              borderColor: function(context) {
+                const pps = context.raw?.y;
+                return pps > PPS_THRESHOLD ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)';
+              },
+              backgroundColor: function(context) {
+                const pps = context.raw?.y;
+                return pps > PPS_THRESHOLD ? 'rgba(255, 99, 132, 0.2)' : 'rgba(75, 192, 192, 0.2)';
+              },
               fill: true,
               tension: 0.4,
+              segment: {
+                borderColor: function(context) {
+                  const pps = context.p1.parsed.y;
+                  return pps > PPS_THRESHOLD ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)';
+                }
+              }
             },
           ],
         },
@@ -556,7 +631,7 @@
             );
 
             // Add alert if it's an attack
-            if (latest.predicted_label.toLowerCase() !== "benign") {
+            if (latest.predicted_label.toLowerCase() !== "benign" && latest.confidence >= CONFIDENCE_THRESHOLD) {
               const message = `${new Date(latest.timestamp * 1000).toLocaleTimeString()} - ${
                 latest.predicted_label
               } attack detected! (Confidence: ${latest.confidence}%)`;
