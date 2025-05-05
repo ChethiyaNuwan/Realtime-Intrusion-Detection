@@ -21,11 +21,10 @@ def get_db_connection():
                 attack_type VARCHAR(255),
                 confidence FLOAT,
                 interface VARCHAR(45),
-                timestamp DATETIME,
-                source_ip VARCHAR(45),
-                dest_ip VARCHAR(45)
+                timestamp DATETIME
             )
             """
+            
             cursor.execute(create_table_query)
             cursor.close()
             return connection
@@ -35,17 +34,17 @@ def get_db_connection():
             connection.close()
         return None
 
-def store_attack_details(connection, attack_type, confidence, interface, timestamp, source_ip, dest_ip): 
+def store_attack_details(connection, attack_type, confidence, interface, timestamp): 
     """Store attack details in MySQL database"""
     cursor = None
     try:
         cursor = connection.cursor()
         
         insert_query = """
-        INSERT INTO attack_logs (attack_type, confidence, interface, timestamp, source_ip, dest_ip)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO attack_logs (attack_type, confidence, interface, timestamp)
+        VALUES (%s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (attack_type, confidence, interface, timestamp, source_ip, dest_ip))
+        cursor.execute(insert_query, (attack_type, confidence, interface, timestamp))
         connection.commit()
         
     except mysql.connector.Error as e:
