@@ -22,6 +22,9 @@ CAPTURE_DURATION = 10
 MONITORING_INTERVAL = 1
 CLEANUP_INTERVAL = 30
 MAX_FILES_KEPT = 10
+CONFIDENCE_THRESHOLD = 80  # Minimum confidence to record attack
+PPS_THRESHOLD = 500       # Minimum PPS to record attack
+DUPLICATE_WINDOW = CAPTURE_DURATION  # Time window to check for duplicates
 
 # Setup logging
 logging.basicConfig(
@@ -232,11 +235,6 @@ def cleanup_thread():
         cleanup_old_files("flows", MAX_FILES_KEPT)
         time.sleep(CLEANUP_INTERVAL)
 
-
-# Add these constants at the top with other constants
-CONFIDENCE_THRESHOLD = 80  # Minimum confidence to record attack
-PPS_THRESHOLD = 500       # Minimum PPS to record attack
-DUPLICATE_WINDOW = CAPTURE_DURATION  # Time window to check for duplicates
 
 def sync_database():
     """Thread to sync attack logs with database"""
