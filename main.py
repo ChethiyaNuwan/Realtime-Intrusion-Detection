@@ -34,7 +34,7 @@ logging.basicConfig(
 )
 
 # Initialize db
-# connection = get_db_connection()
+connection = get_db_connection()
 
 # Load the models
 dl_model = tf.keras.models.load_model('lib/deep_learning_model.h5')
