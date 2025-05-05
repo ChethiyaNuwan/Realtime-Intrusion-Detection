@@ -19,8 +19,8 @@ from utils import get_latest_pcap, get_latest_csv
 
 # Constants for monitoring
 CAPTURE_DURATION = 10
-MONITORING_INTERVAL = 5
-CLEANUP_INTERVAL = 60
+MONITORING_INTERVAL = 1
+CLEANUP_INTERVAL = 30
 MAX_FILES_KEPT = 10
 
 # Setup logging
@@ -196,22 +196,25 @@ def monitor_network(interface):
                         
                         logging.info(f"DL Model Detected: {attack_type} (Confidence: {confidence:.2f}%)")
                         
-                        if confidence > 90 and str.lower(attack_type) != "benign":
+                        if confidence > 80 and str.lower(attack_type) != "benign":
                             logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
-
-                            attack_logs.append({
-                                'id': len(attack_logs) + 1,
+                            
+                            log_entry = {
                                 'attack_type': attack_type,
-                                'confidence': confidence,
+                                'confidence': round(float(confidence), 2),
                                 'interface': interface,
-                                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                                'source_ip': "Unknown",
-                                'dest_ip': "Unknown"
-                            })
+                                'predicted_label': attack_type,
+                                'timestamp': time.time(),
+                                # 'source_ip': "Unknown",
+                                # 'dest_ip': "Unknown"
+                            }
+                            
+                            attack_logs['attacks'].append(log_entry)
+                            
+                            # Keep only the latest logs
+                            if len(attack_logs['attacks']) > MAX_FILES_KEPT:
+                                attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
 
-                            if len(attack_logs) > MAX_FILES_KEPT:
-                                attack_logs = attack_logs[-MAX_FILES_KEPT:]
-                        
                 except Exception as e:
                     logging.error(f"Error during prediction: {e}")
             
@@ -228,6 +231,52 @@ def cleanup_thread():
         cleanup_old_files("captures", MAX_FILES_KEPT)
         cleanup_old_files("flows", MAX_FILES_KEPT)
         time.sleep(CLEANUP_INTERVAL)
+
+
+# Add these constants at the top with other constants
+CONFIDENCE_THRESHOLD = 80  # Minimum confidence to record attack
+PPS_THRESHOLD = 500       # Minimum PPS to record attack
+DUPLICATE_WINDOW = CAPTURE_DURATION  # Time window to check for duplicates
+
+def sync_database():
+    """Thread to sync attack logs with database"""
+    while True:
+        try:
+            if 'attacks' in attack_logs and attack_logs['attacks']:
+                current_time = time.time()
+                
+                # Get attacks that meet thresholds
+                filtered_attacks = []
+                processed_attacks = set()  # Track processed attacks to avoid duplicates
+                
+                for attack in attack_logs['attacks']:
+                    attack_key = f"{attack['attack_type']}_{attack['confidence']}"
+                    attack_time = attack['timestamp']
+                    
+                    # Check if attack meets thresholds
+                    if (attack['confidence'] >= CONFIDENCE_THRESHOLD and 
+                        attack.get('pps', 0) >= PPS_THRESHOLD):
+                        
+                        # Check for duplicates within time window
+                        is_duplicate = False
+                        for processed in processed_attacks:
+                            if (processed.startswith(attack_key) and 
+                                abs(attack_time - float(processed.split('_')[-1])) <= DUPLICATE_WINDOW):
+                                is_duplicate = True
+                                break
+                        
+                        if not is_duplicate:
+                            filtered_attacks.append(attack)
+                            processed_attacks.add(f"{attack_key}_{attack_time}")
+                
+                # Update attack_logs with filtered attacks
+                attack_logs['attacks'] = filtered_attacks
+                
+            time.sleep(MONITORING_INTERVAL)
+            
+        except Exception as e:
+            logging.error(f"Error in database sync: {e}")
+            time.sleep(MONITORING_INTERVAL)
 
 
 # Flask API
@@ -272,7 +321,7 @@ def get_latest_data():
 
 @app.route('/get_attack_logs')
 def get_attack_logs_route():
-    return jsonify(attack_logs)
+    return jsonify(attack_logs['attacks'])
 
 
 @app.route('/stream_packets')
@@ -308,8 +357,10 @@ if __name__ == '__main__':
     # Start the cleanup thread
     cleanup_thread_instance = threading.Thread(target=cleanup_thread, daemon=True)
     cleanup_thread_instance.start()
-
-    # monitor_network('Ethernet 2')
+    
+    # Start the database sync thread
+    sync_thread = threading.Thread(target=sync_database, daemon=True)
+    sync_thread.start()
 
     # Run the Flask app
     app.run(host='0.0.0.0', port=5000, debug=True) # Uncommented and enabled debug mode
