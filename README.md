@@ -6,3 +6,6 @@ Install Requirements:
 
 Run the system:
 `python main.py`
+
+Access the client application
+`http://localhost:5000`
