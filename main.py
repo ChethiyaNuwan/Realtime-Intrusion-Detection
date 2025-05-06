@@ -23,7 +23,7 @@ MONITORING_INTERVAL = 1
 CLEANUP_INTERVAL = 30
 MAX_FILES_KEPT = 10
 CONFIDENCE_THRESHOLD = 80  # Minimum confidence to record attack
-PPS_THRESHOLD = 100       # Minimum PPS to record attack
+PPS_THRESHOLD = 10       # Minimum PPS to record attack
 DUPLICATE_WINDOW = CAPTURE_DURATION  # Time window to check for duplicates
 
 # Setup logging
@@ -44,7 +44,7 @@ dl_model = tf.keras.models.load_model('lib/deep_learning_model.h5')
 label_mapping = get_label_mapping()
 
 # Global variables to store state
-interface_data = defaultdict(list)
+latest_data = defaultdict(list)
 packet_data = defaultdict(list) 
 attack_logs = defaultdict(list)
 
@@ -151,15 +151,15 @@ def monitor_network(interface):
                     
                     if time_diff >= 1:  # Calculate PPS every second
                         current_pps = packet_count / time_diff
-                        interface_data[interface].append({
+                        latest_data[interface].append({
                             'timestamp': current_time,
                             'pps': int(current_pps),
                             'predicted_label': 'Benign',
                             'confidence': 100
                         })
                         
-                        if len(interface_data[interface]) > MAX_FILES_KEPT:
-                            interface_data[interface] = interface_data[interface][-MAX_FILES_KEPT:]
+                        if len(latest_data[interface]) > MAX_FILES_KEPT:
+                            latest_data[interface] = latest_data[interface][-MAX_FILES_KEPT:]
                         
                         packet_count = 0
                         start_time = current_time
@@ -183,40 +183,39 @@ def monitor_network(interface):
                     X = preprocess_flow(flow_file)
                     pred_label, pred_probs = predict_attack(X, dl_model)
                     
-                    for i, (label, prob) in enumerate(zip(pred_label, pred_probs)):
-                        attack_type = label_mapping[label]
-                        confidence = prob.max() * 100
+                    # Get the prediction with highest probability
+                    max_prob_index = pred_probs.argmax()
+                    attack_type = label_mapping[pred_label[max_prob_index]]
+                    confidence = pred_probs[max_prob_index].max() * 100
+                    
+                    latest_data[interface].append({
+                        'timestamp': time.time(),
+                        'pps': int(current_pps), 
+                        'predicted_label': attack_type,
+                        'confidence': round(float(confidence), 2),
+                    })
+                    
+                    if len(latest_data[interface]) > MAX_FILES_KEPT:
+                        latest_data[interface] = latest_data[interface][-MAX_FILES_KEPT:]
+                    
+                    logging.info(f"DL Model Detected: {attack_type} (Confidence: {confidence:.2f}%)")
+                    
+                    if confidence > CONFIDENCE_THRESHOLD and str.lower(attack_type) != "benign":
+                        logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
                         
-                        interface_data[interface].append({
-                            'timestamp': time.time(),
-                            'pps': int(current_pps), 
-                            'predicted_label': attack_type,
+                        log_entry = {
+                            'attack_type': attack_type,
                             'confidence': round(float(confidence), 2),
-                        })
+                            'interface': interface,
+                            'predicted_label': attack_type,
+                            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'pps': int(current_pps),
+                        }
                         
-                        if len(interface_data[interface]) > MAX_FILES_KEPT:
-                            interface_data[interface] = interface_data[interface][-MAX_FILES_KEPT:]
+                        attack_logs['attacks'].append(log_entry)
                         
-                        logging.info(f"DL Model Detected: {attack_type} (Confidence: {confidence:.2f}%)")
-                        
-                        if confidence > 80 and str.lower(attack_type) != "benign":
-                            logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
-                            
-                            log_entry = {
-                                'attack_type': attack_type,
-                                'confidence': round(float(confidence), 2),
-                                'interface': interface,
-                                'predicted_label': attack_type,
-                                'timestamp': time.time(),
-                                # 'source_ip': "Unknown",
-                                # 'dest_ip': "Unknown"
-                            }
-                            
-                            attack_logs['attacks'].append(log_entry)
-                            
-                            # Keep only the latest logs
-                            if len(attack_logs['attacks']) > MAX_FILES_KEPT:
-                                attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
+                        if len(attack_logs['attacks']) > MAX_FILES_KEPT:
+                            attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
 
                 except Exception as e:
                     logging.error(f"Error during prediction: {e}")
@@ -240,7 +239,8 @@ def sync_database():
     """Thread to sync attack logs with database"""
     while True:
         try:
-            if 'attacks' in attack_logs and attack_logs['attacks']:
+            if 'attacks' in attack_logs and len(attack_logs['attacks']) > 0:
+                logging.info(f"Starting DB Sync")
                 current_time = time.time()
                 
                 # Get attacks that meet thresholds
@@ -253,7 +253,7 @@ def sync_database():
                     
                     # Check if attack meets thresholds
                     if (attack['confidence'] >= CONFIDENCE_THRESHOLD and 
-                        attack.get('pps', 0) >= PPS_THRESHOLD):
+                        attack['pps'] >= PPS_THRESHOLD):
                         
                         # Check for duplicates within time window
                         is_duplicate = False
@@ -268,18 +268,19 @@ def sync_database():
                             processed_attacks.add(f"{attack_key}_{attack_time}")
                             
                             try:
-                                store_attack_details(connection, attack)
+                                store_attack_details(connection, attack['attack_type'], attack['confidence'], attack['interface'], attack['timestamp'])
+                                logging.info(f"Stored attack in database: {attack}")
                             except Exception as db_error:
                                 logging.error(f"Failed to store attack in database: {db_error}")
                 
                 # Update attack_logs with filtered attacks
-                attack_logs['attacks'] = filtered_attacks
+                # attack_logs['attacks'] = filtered_attacks
                 
-            time.sleep(MONITORING_INTERVAL)
+            time.sleep(CAPTURE_DURATION)
             
         except Exception as e:
             logging.error(f"Error in database sync: {e}")
-            time.sleep(MONITORING_INTERVAL)
+            time.sleep(CAPTURE_DURATION)
 
 
 # Flask API
@@ -314,11 +315,11 @@ def get_latest_data():
     interface = request.args.get('interface')
     if not interface:
         return jsonify({'error': 'No interface specified'}), 400
-    if interface not in interface_data:
+    if interface not in latest_data:
         return jsonify({'data': []})
 
     # Convert numpy types to native Python types before serialization
-    data = interface_data[interface][-1:] if interface_data[interface] else []    
+    data = latest_data[interface][-1:] if latest_data[interface] else []    
     logging.info(f"Sending data for interface {interface}: {data}")
     return jsonify({'data': data})
 
