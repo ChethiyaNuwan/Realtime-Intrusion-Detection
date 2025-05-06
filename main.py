@@ -23,7 +23,7 @@ MONITORING_INTERVAL = 1
 CLEANUP_INTERVAL = 30
 MAX_FILES_KEPT = 10
 CONFIDENCE_THRESHOLD = 80  # Minimum confidence to record attack
-PPS_THRESHOLD = 500       # Minimum PPS to record attack
+PPS_THRESHOLD = 100       # Minimum PPS to record attack
 DUPLICATE_WINDOW = CAPTURE_DURATION  # Time window to check for duplicates
 
 # Setup logging
@@ -266,6 +266,11 @@ def sync_database():
                         if not is_duplicate:
                             filtered_attacks.append(attack)
                             processed_attacks.add(f"{attack_key}_{attack_time}")
+                            
+                            try:
+                                store_attack_details(connection, attack)
+                            except Exception as db_error:
+                                logging.error(f"Failed to store attack in database: {db_error}")
                 
                 # Update attack_logs with filtered attacks
                 attack_logs['attacks'] = filtered_attacks
