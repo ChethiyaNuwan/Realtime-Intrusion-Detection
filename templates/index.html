@@ -486,7 +486,7 @@
               const data = JSON.parse(event.data);
               
               // Format packet details for display with proper field validation
-              const timestamp = new Date(data.timestamp*1000).toLocaleTimeString() || 'Unknown';
+              const timestamp = new Date().toLocaleTimeString() || 'Unknown';
               const source = data.source || 'Unknown';
               const destination = data.destination || 'Unknown';
               const protocol = data.protocol || 'Unknown';
@@ -624,7 +624,7 @@
             // Add log entry for prediction
             addLog(
               terminal,
-              `${new Date().toLocaleTimeString()} ${
+              `[${new Date().toLocaleTimeString()}] ${
                 latest.predicted_label
               } (Confidence: ${latest.confidence}%)`,
               latest.predicted_label.toLowerCase() !== "benign"
