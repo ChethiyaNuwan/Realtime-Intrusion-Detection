@@ -39,6 +39,7 @@ def store_attack_details(connection, attack_type, confidence, interface, timesta
     cursor = None
     try:
         cursor = connection.cursor()
+        logging.info("Storing attack details in MySQL database")
         
         insert_query = """
         INSERT INTO attack_logs (attack_type, confidence, interface, timestamp)
@@ -51,6 +52,7 @@ def store_attack_details(connection, attack_type, confidence, interface, timesta
         logging.error(f"Database error: {e}")
         if connection.is_connected():
             connection.rollback()
+        raise e  # Re-raise the caught error
     finally:
         if cursor:
             cursor.close()
