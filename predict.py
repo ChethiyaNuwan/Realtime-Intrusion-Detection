@@ -37,9 +37,14 @@ def preprocess_flow(flow_file):
     if df.empty:
         raise ValueError("No data remains after preprocessing. Please check flow file format.")
     
+    # Convert all numeric columns to float
+    numeric_columns = df.select_dtypes(include=['object']).columns
+    for col in numeric_columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
     # Remove rows with infinity values
     df = df.replace([np.inf, -np.inf], np.nan)
-    # df = df.dropna()
+    # df = df.fillna(df.mean())
     
     if df.empty:
         raise ValueError("No data remains after removing infinite values.")
