@@ -145,6 +145,11 @@
             >
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="#" id="muteBtn">
+                <i class="fas fa-volume-up" id="muteIcon"></i> Alerts
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="#" id="settingsBtn" data-bs-toggle="tooltip" data-bs-html="true"
               ><i class="fas fa-cogs"></i> Settings</a
             >
@@ -457,6 +462,27 @@
         },
       });
 
+      let isMuted = false;
+      const muteButton = document.getElementById('muteBtn')
+      if(muteButton.className.includes('mute') ){
+        isMuted = true;
+      }
+
+      // Add this after other event listeners
+      document.getElementById('muteBtn').addEventListener('click', function() {
+          isMuted = !isMuted;
+          const muteIcon = document.getElementById('muteIcon');
+          
+          if (isMuted) {
+              muteIcon.className = 'fas fa-volume-mute';
+              addLog(terminal, "Alerts muted");
+          } else {
+              muteIcon.className = 'fas fa-volume-up';
+              addLog(terminal, "Alerts unmuted");
+          }
+      });
+
+      // Modify the addLog function to respect mute setting
       function addLog(terminalElement, message, isError = false) {
         const logEntry = document.createElement("div");
         logEntry.textContent = message;
@@ -721,7 +747,7 @@
       });
 
       // Function to show a Bootstrap alert at the top right with animation
-      function showTopRightAlert(message, attackType) {
+      function showOverlayAlert(message, attackType) {
         topRightAlertContainer.innerHTML = "";
         const alertDiv = document.createElement("div");
         alertDiv.className =
@@ -741,10 +767,6 @@
         alertDiv.appendChild(closeButton);
 
         topRightAlertContainer.appendChild(alertDiv);
-
-        // Play sound
-        alertAudio.currentTime = 0;
-        alertAudio.play();
       }
 
       // Function to add an alert to the sidebar or show as top-right alert
@@ -773,13 +795,15 @@
           alertContainer.appendChild(alertDiv);
         }
 
-        // Play sound and animate
-        alertAudio.currentTime = 0.2;
-        alertAudio.play();
-
         // If sidebar is closed, show top-right alert
         if (!alertSidebar.classList.contains("open")) {
-          showTopRightAlert(message, attackType);
+          showOverlayAlert(message, attackType);
+        }
+
+        // Play sound
+        if(!isMuted){
+          alertAudio.currentTime = 0;
+          alertAudio.play();
         }
       }
 
