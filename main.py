@@ -195,27 +195,36 @@ def monitor_network(interface):
                         'confidence': round(float(confidence), 2),
                     })
                     
-                    if len(latest_data[interface]) > MAX_FILES_KEPT:
-                        latest_data[interface] = latest_data[interface][-MAX_FILES_KEPT:]
-                    
                     logging.info(f"DL Model Detected: {attack_type} (Confidence: {confidence:.2f}%)")
                     
-                    if confidence > CONFIDENCE_THRESHOLD and str.lower(attack_type) != "benign":
+                    if confidence > CONFIDENCE_THRESHOLD and current_pps > PPS_THRESHOLD and str.lower(attack_type) != "benign":
                         logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
                         
-                        log_entry = {
-                            'attack_type': attack_type,
-                            'confidence': round(float(confidence), 2),
-                            'interface': interface,
-                            'predicted_label': attack_type,
-                            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                            'pps': int(current_pps),
-                        }
+                        current_time = time.time()
+                        is_duplicate = False
                         
-                        attack_logs['attacks'].append(log_entry)
+                        # Check for duplicates in existing attack logs
+                        for existing_attack in attack_logs['attacks']:
+                            if (existing_attack['attack_type'] == attack_type and 
+                                existing_attack['confidence'] == confidence and
+                                abs(existing_attack['timestamp'] - current_time) < DUPLICATE_WINDOW):
+                                is_duplicate = True
+                                break
                         
-                        if len(attack_logs['attacks']) > MAX_FILES_KEPT:
-                            attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
+                        if not is_duplicate:
+                            log_entry = {
+                                'attack_type': attack_type,
+                                'confidence': round(float(confidence), 2),
+                                'interface': interface,
+                                'predicted_label': attack_type,
+                                'timestamp': current_time,
+                                'pps': int(current_pps),
+                            }
+                            
+                            attack_logs['attacks'].append(log_entry)
+                            
+                            if len(attack_logs['attacks']) > MAX_FILES_KEPT:
+                                attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
 
                 except Exception as e:
                     logging.error(f"Error during prediction: {e}")
@@ -241,42 +250,12 @@ def sync_database():
         try:
             if 'attacks' in attack_logs and len(attack_logs['attacks']) > 0:
                 logging.info(f"Starting DB Sync")
-                current_time = time.time()
-                
-                # Get attacks that meet thresholds
-                filtered_attacks = []
-                processed_attacks = set()  # Track processed attacks to avoid duplicates
-                
-                for attack in attack_logs['attacks']:
-                    attack_key = f"{attack['attack_type']}_{attack['confidence']}"
-                    attack_time = attack['timestamp']
-                    
-                    # Check if attack meets thresholds
-                    if (attack['confidence'] >= CONFIDENCE_THRESHOLD and 
-                        attack['pps'] >= PPS_THRESHOLD):
-                        
-                        # Check for duplicates within time window
-                        is_duplicate = False
-                        for processed in processed_attacks:
-                            if (processed.startswith(attack_key) and 
-                                abs(attack_time - float(processed.split('_')[-1])) <= DUPLICATE_WINDOW):
-                                is_duplicate = True
-                                break
-                        
-                        if not is_duplicate:
-                            filtered_attacks.append(attack)
-                            processed_attacks.add(f"{attack_key}_{attack_time}")
-                            
-                            try:
-                                store_attack_details(connection, attack['attack_type'], attack['confidence'], attack['interface'], attack['timestamp'])
-                                logging.info(f"Stored attack in database: {attack}")
-                            except Exception as db_error:
-                                logging.error(f"Failed to store attack in database: {db_error}")
-                
-                # Update attack_logs with filtered attacks
-                # attack_logs['attacks'] = filtered_attacks
-                
-            time.sleep(CAPTURE_DURATION)
+                for log_entry in attack_logs['attacks']:
+                    datetime_str =  time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(log_entry['timestamp']))
+                    store_attack_details(connection, log_entry['attack_type'], log_entry['confidence'], log_entry['interface'], datetime_str)
+                    logging.info(f"DB Sync Complete")
+                attack_logs['attacks'] = []
+            time.sleep(DUPLICATE_WINDOW)
             
         except Exception as e:
             logging.error(f"Error in database sync: {e}")
