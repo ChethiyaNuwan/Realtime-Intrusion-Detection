@@ -95,7 +95,7 @@ def cleanup_old_files(directory, max_files):
     try:
         files = [os.path.join(directory, f) for f in os.listdir(directory) 
                 if os.path.isfile(os.path.join(directory, f))]
-        if len(files) > max_files:
+        if len(files) > max_files + 5:
             files.sort(key=lambda x: os.path.getmtime(x))
             for f in files[:-max_files]:
                 os.remove(f)
@@ -158,7 +158,7 @@ def monitor_network(interface):
                             'confidence': 100
                         })
                         
-                        if len(latest_data[interface]) > MAX_FILES_KEPT:
+                        if len(latest_data[interface]) > MAX_FILES_KEPT + 5:
                             latest_data[interface] = latest_data[interface][-MAX_FILES_KEPT:]
                         
                         packet_count = 0
@@ -184,47 +184,48 @@ def monitor_network(interface):
                     pred_label, pred_probs = predict_attack(X, dl_model)
                     
                     # Get the prediction with highest probability
-                    max_prob_index = pred_probs.argmax()
-                    attack_type = label_mapping[pred_label[max_prob_index]]
-                    confidence = pred_probs[max_prob_index].max() * 100
-                    
-                    latest_data[interface].append({
-                        'timestamp': time.time(),
-                        'pps': int(current_pps), 
-                        'predicted_label': attack_type,
-                        'confidence': round(float(confidence), 2),
-                    })
-                    
-                    logging.info(f"DL Model Detected: {attack_type} (Confidence: {confidence:.2f}%)")
-                    
-                    if confidence > CONFIDENCE_THRESHOLD and current_pps > PPS_THRESHOLD and str.lower(attack_type) != "benign":
-                        logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
+                    if len(pred_label) > 0 and len(pred_probs) > 0:
+                        max_prob_index = pred_probs[0].argmax()
+                        attack_type = label_mapping[pred_label[0]]
+                        confidence = pred_probs[0][max_prob_index] * 100
                         
-                        current_time = time.time()
-                        is_duplicate = False
+                        latest_data[interface].append({
+                            'timestamp': time.time(),
+                            'pps': int(current_pps), 
+                            'predicted_label': attack_type,
+                            'confidence': round(float(confidence), 2),
+                        })
                         
-                        # Check for duplicates in existing attack logs
-                        for existing_attack in attack_logs['attacks']:
-                            if (existing_attack['attack_type'] == attack_type and 
-                                existing_attack['confidence'] == confidence and
-                                abs(existing_attack['timestamp'] - current_time) < DUPLICATE_WINDOW):
-                                is_duplicate = True
-                                break
+                        logging.info(f"DL Model Detected: {attack_type} (Confidence: {confidence:.2f}%)")
                         
-                        if not is_duplicate:
-                            log_entry = {
-                                'attack_type': attack_type,
-                                'confidence': round(float(confidence), 2),
-                                'interface': interface,
-                                'predicted_label': attack_type,
-                                'timestamp': current_time,
-                                'pps': int(current_pps),
-                            }
+                        if confidence > CONFIDENCE_THRESHOLD and current_pps > PPS_THRESHOLD and str.lower(attack_type) != "benign":
+                            logging.warning(f"HIGH CONFIDENCE ATTACK DETECTED: {attack_type}")
                             
-                            attack_logs['attacks'].append(log_entry)
+                            current_time = time.time()
+                            is_duplicate = False
                             
-                            if len(attack_logs['attacks']) > MAX_FILES_KEPT:
-                                attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
+                            # Check for duplicates in existing attack logs
+                            for existing_attack in attack_logs['attacks']:
+                                if (existing_attack['attack_type'] == attack_type and 
+                                    existing_attack['confidence'] == confidence and
+                                    abs(existing_attack['timestamp'] - current_time) < DUPLICATE_WINDOW):
+                                    is_duplicate = True
+                                    break
+                            
+                            if not is_duplicate:
+                                log_entry = {
+                                    'attack_type': attack_type,
+                                    'confidence': round(float(confidence), 2),
+                                    'interface': interface,
+                                    'predicted_label': attack_type,
+                                    'timestamp': current_time,
+                                    'pps': int(current_pps),
+                                }
+                                
+                                attack_logs['attacks'].append(log_entry)
+                                
+                                if len(attack_logs['attacks']) > MAX_FILES_KEPT + 5:
+                                    attack_logs['attacks'] = attack_logs['attacks'][-MAX_FILES_KEPT:]
 
                 except Exception as e:
                     logging.error(f"Error during prediction: {e}")
