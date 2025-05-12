@@ -51,11 +51,11 @@ def preprocess_flow(flow_file):
     
     # Handle extremely large values by clipping them to reasonable limits
     # Calculate percentile-based limits to avoid outlier influence
-    upper_limits = df.quantile(0.99)
-    lower_limits = df.quantile(0.01)
+    # upper_limits = df.quantile(0.99)
+    # lower_limits = df.quantile(0.01)
     
     # Clip values to within these limits
-    df = df.clip(lower=lower_limits, upper=upper_limits, axis=1)
+    # df = df.clip(lower=lower_limits, upper=upper_limits, axis=1)
     
     X = preprocessors['imputer'].transform(df)
     X = preprocessors['constant_filter'].transform(X)
