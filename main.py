@@ -181,13 +181,39 @@ def monitor_network(interface):
                 logging.info(f"Processing flow file: {flow_file}")
                 try:
                     X = preprocess_flow(flow_file)
-                    pred_label, pred_probs = predict_attack(X, dl_model)
+                    if X.shape[0] == 0:
+                        logging.warning(f"No data to predict in flow file: {flow_file}")
+                        # Optionally, append a benign/unknown status or skip
+                        latest_data[interface].append({
+                            'timestamp': time.time(),
+                            'pps': int(current_pps),
+                            'predicted_label': 'Benign', # Or 'Unknown'
+                            'confidence': 0,
+                        })
+                        if len(latest_data[interface]) > MAX_FILES_KEPT:
+                            latest_data[interface] = latest_data[interface][-MAX_FILES_KEPT:]
+                        continue # Skip to the next monitoring interval
+
+                    pred_label_per_flow, pred_probs_per_flow = predict_attack(X, dl_model)
                     
-                    # Get the prediction with highest probability
-                    max_prob_index = pred_probs.argmax()
-                    attack_type = label_mapping[pred_label[max_prob_index]]
-                    confidence = pred_probs[max_prob_index].max() * 100
-                    
+                    # Calculate average confidence for each class across all flows
+                    if pred_probs_per_flow.ndim == 1: # Handle case of single flow prediction
+                        pred_probs_per_flow = np.expand_dims(pred_probs_per_flow, axis=0)
+
+                    if pred_probs_per_flow.shape[0] > 0:
+                        average_confidence_per_class = np.mean(pred_probs_per_flow, axis=0)
+                        
+                        # Get the class index with the highest average confidence
+                        dominant_class_index = np.argmax(average_confidence_per_class)
+                        
+                        # Get the attack type and its average confidence
+                        attack_type = label_mapping[dominant_class_index]
+                        confidence = average_confidence_per_class[dominant_class_index] * 100
+                    else:
+                        # Fallback if pred_probs_per_flow is empty for some reason
+                        attack_type = 'Benign' # Or 'Unknown'
+                        confidence = 0
+
                     latest_data[interface].append({
                         'timestamp': time.time(),
                         'pps': int(current_pps), 
