@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Real Time Threat Monitoring and Detection Dashboard</title>
+    <link rel="icon" type="image/png" href="static/assets/logo.png" />
 
     <!-- Bootstrap 5 CSS -->
     <link
@@ -32,7 +33,7 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         border-radius: 8px;
         margin-top: 20px;
-        padding: 10px 20px;
+        padding: 10px;
       }
       .navbar-brand {
         font-size: 1.5rem;
@@ -80,19 +81,21 @@
       .sidebar {
         position: fixed;
         top: 0;
-        left: -300px;
-        width: 300px;
+        right: -350px; /* Changed from left: -300px; */
+        left: auto;    /* Added to ensure right positioning takes precedence */
+        width: 350px;
         height: 100%;
         background-color: #343a40;
         color: #fff;
         overflow-y: auto;
-        transition: left 0.3s;
+        transition: right 0.3s; /* Changed from transition: left 0.3s; */
         z-index: 1000;
         padding: 20px;
         padding-top: 90px;
       }
       .sidebar.open {
-        left: 0;
+        right: 0; /* Changed from left: 0; */
+        left: auto; /* Added to ensure right positioning takes precedence */
       }
       .sidebar h5 {
         color: #ffffff;
@@ -105,13 +108,19 @@
       .toggle-sidebar {
         position: fixed;
         top: 20px;
-        left: 20px;
+        right: 20px; /* Changed from left: 20px; */
+        left: auto;   /* Added to ensure right positioning takes precedence */
         background-color: #343a40;
         color: #fff;
         border: none;
         border-radius: 5px;
         padding: 10px 15px;
         z-index: 1100;
+      }
+      #logo{
+        width: 60px;
+        border-radius: 12px;
+        margin-right: 10px;
       }
     </style>
     <link
@@ -123,8 +132,9 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light container">
       <a class="navbar-brand ms-3" href="#"
-        ><i class="fas fa-network-wired"></i> Real Time Threat Monitoring and
-        Detection Dashboard
+        >
+        <img src="static/assets/logo.png" width="50px" id="logo"/>
+        Real Time Threat Monitoring and Detection Dashboard
       </a>
       <button
         class="navbar-toggler"
@@ -146,7 +156,7 @@
           </li>
           <li class="nav-item">
             <a class="nav-link" href="#" id="muteBtn">
-                <i class="fas fa-volume-up" id="muteIcon"></i> Alerts
+                <i class="fas fa-volume-up" id="muteIcon"></i> Alarm
             </a>
           </li>
           <li class="nav-item">
@@ -260,7 +270,6 @@
       const ctx = document.getElementById("networkChart").getContext("2d");
       const ppsCtx = document.getElementById("ppsChart").getContext("2d");
       const terminal = document.getElementById("terminal");
-      const terminal2 = document.getElementById("terminal2");
       const streamTerminal = document.getElementById("streamTerminal");
       const alertSidebar = document.getElementById("alertSidebar");
       const alertContainer = document.getElementById("alertContainer");
@@ -269,7 +278,8 @@
       let selectedInterface = null;
       let fetchDataInterval = null;
       let fetchAlertsInterval = null;
-      let eventSource = null;
+      // let eventSource = null; // Remove this
+      let streamWorker = null; // Add this
 
       let PPS_THRESHOLD = 100;
       let CONFIDENCE_THRESHOLD = 80;
@@ -337,7 +347,11 @@
               },
               pointRadius: function (context) {
                 const label = context.raw?.label;
-                return label && label.toLowerCase() !== "benign" ? 8 : 6;
+                const confidence = context.raw?.confidence;
+                if (label && label.toLowerCase() === "benign") {
+                  return 4;
+                }
+                return Math.ceil(confidence/10)-1;
               },
               pointStyle: "circle",
             },
@@ -367,7 +381,13 @@
                 callback: function (value) {
                   // Convert numeric value back to label for y-axis
                   for (let [label, id] of predictionLabelMap) {
-                    if (id === value) return label;
+                    if (id === value) {
+                      const parts = label.split(' ');
+                      if (parts.length >= 2) {
+                        return parts.slice(-2).join(' '); // Get last two words
+                      }
+                      return label; // Return the full label if less than 2 words
+                    }
                   }
                   return "";
                 },
@@ -384,7 +404,7 @@
                 label: function (context) {
                   const point = context.raw;
                   const time = new Date(point.x).toLocaleTimeString();
-                  return `${point.label} (${time})`;
+                  return `${point.label} (${point.confidence}%)`;
                 },
               },
             },
@@ -482,74 +502,66 @@
           }
       });
 
-      // Modify the addLog function to respect mute setting
+      // Modify the addLog function to respect mute setting and limit entries
       function addLog(terminalElement, message, isError = false) {
+        const MAX_LOG_ENTRIES = 200; // Keep, for example, the last 200 entries
+
+        // Remove older entries if the limit is exceeded
+        while (terminalElement.childNodes.length >= MAX_LOG_ENTRIES) {
+          terminalElement.removeChild(terminalElement.firstChild);
+        }
+
         const logEntry = document.createElement("div");
         logEntry.textContent = message;
         if (isError) {
           logEntry.style.color = "#ff4444";
         }
         terminalElement.appendChild(logEntry);
-        terminalElement.scrollTop = terminalElement.scrollHeight;
+        terminalElement.scrollTop = terminalElement.scrollHeight; // Auto-scroll to the bottom
       }
 
       // Remove PPS Chart initialization from setupStreamConnection function
       function setupStreamConnection(interfaceName) {
-        // Close existing stream if any
-        if (eventSource) {
-          eventSource.close();
-          eventSource = null;
+        // Close existing worker if any
+        if (streamWorker) {
+          streamWorker.postMessage({ command: 'close' }); // Ask worker to close its EventSource
+          streamWorker.terminate();
+          streamWorker = null;
+          addLog(streamTerminal, "Previous stream worker terminated.");
         }
 
-        if (!!window.EventSource) {
-          eventSource = new EventSource(
-            `/stream_packets?interface=${encodeURIComponent(interfaceName)}`
-          );
+        if (window.Worker) {
+          streamWorker = new Worker("static/js/stream_worker.js"); // Adjust path if needed
 
-          // Event handlers remain the same
-          eventSource.onmessage = function (event) {
-            try {
-              const data = JSON.parse(event.data);
-              
-              // Format packet details for display with proper field validation
-              const timestamp = new Date().toLocaleTimeString() || 'Unknown';
-              const source = data.source || 'Unknown';
-              const destination = data.destination || 'Unknown';
-              const protocol = data.protocol || 'Unknown';
-              const length = data.length || '0';
-              
-              // Create fixed-width format string
-              const formattedTimestamp = `[${timestamp}]`.padEnd(15);
-              const formattedSource = `Source: ${source}`.padEnd(25);
-              const formattedDest = `→ Dest: ${destination}`.padEnd(25);
-              const formattedProtocol = `| Protocol: ${protocol}`.padEnd(20);
-              const formattedLength = `| Length: ${length.toString().padStart(5)} bytes`;
-              
-              const packetDetails = `${formattedTimestamp}${formattedSource}${formattedDest}${formattedProtocol}${formattedLength}`;
-              
-              // Add packet details to stream terminal
-              addLog(streamTerminal, packetDetails);
+          streamWorker.postMessage({ interfaceName: interfaceName });
 
-            } catch (error) {
-              console.error("Error parsing stream data:", error);
-              addLog(streamTerminal, `Error parsing data: ${event.data}`, true);
+          streamWorker.onmessage = function(event) {
+            const { type, payload } = event.data;
+            switch (type) {
+              case 'data':
+                addLog(streamTerminal, payload);
+                break;
+              case 'error':
+                addLog(streamTerminal, payload, true);
+                break;
+              case 'status':
+                addLog(streamTerminal, payload);
+                break;
+              default:
+                console.warn("Received unknown message type from stream worker:", type, payload);
             }
           };
 
-          eventSource.onerror = function (e) {
-            addLog(
-              streamTerminal,
-              "Stream connection error. Attempting to reconnect...",
-              true
-            );
+          streamWorker.onerror = function(error) {
+            console.error("Error from stream worker:", error.message, error);
+            addLog(streamTerminal, `Critical worker error: ${error.message}`, true);
+            // Optionally, try to re-initialize the worker or notify the user more prominently.
           };
 
-          eventSource.onopen = function () {
-            addLog(
-              streamTerminal,
-              `Stream connected for interface: ${interfaceName}`
-            );
-          };
+          addLog(streamTerminal, `Stream worker started for interface: ${interfaceName}`);
+
+        } else {
+            addLog(streamTerminal, "Web Workers are not supported by your browser.", true);
         }
       }
 
@@ -559,9 +571,14 @@
 
         // Clear previous data and intervals
         if (fetchDataInterval) clearInterval(fetchDataInterval);
-        if (eventSource) {
-          eventSource.close();
-          eventSource = null;
+        // if (eventSource) { // Remove this block
+        //   eventSource.close();
+        //   eventSource = null;
+        // }
+        if (streamWorker) { // Add this block to terminate existing worker
+          streamWorker.postMessage({ command: 'close' });
+          streamWorker.terminate();
+          streamWorker = null;
         }
 
         terminal.innerHTML = "";
@@ -608,9 +625,7 @@
 
         try {
           const response = await fetch(
-            `/get_latest_data?interface=${encodeURIComponent(
-              selectedInterface
-            )}`
+            `/get_latest_data?interface=${encodeURIComponent(selectedInterface)}`
           );
           const data = await response.json();
 
@@ -638,7 +653,8 @@
             networkChart.data.datasets[0].data.push({
               x: new Date().getTime(),
               y: predictionLabelMap.get(label),
-              label: label
+              label: label,
+              confidence: isNaN(latest.confidence) ? 0 : latest.confidence.toFixed(2),
             });
 
             // Keep last 100 data points for attack detection visualization
@@ -650,7 +666,7 @@
             // Add log entry for prediction
             addLog(
               terminal,
-              `[${new Date().toLocaleTimeString()}] ${
+              `[${new Date(latest.timestamp*1000).toLocaleTimeString()}] ${
                 latest.predicted_label
               } (Confidence: ${latest.confidence}%)`,
               latest.predicted_label.toLowerCase() !== "benign"
@@ -700,7 +716,7 @@
         } catch (error) {
           console.error("Error fetching attack logs:", error);
           addLog(
-            terminal2,
+            terminal,
             "Error fetching attack logs: " + error.message,
             true
           );
@@ -733,9 +749,9 @@
           });
 
         // Start fetching attack logs periodically regardless of interface selection
-        if (fetchAlertsInterval) clearInterval(fetchAlertsInterval); // Clear previous interval if any
-        fetchAlertsInterval = setInterval(fetchAttackLogs, 5000); // Fetch attack logs every 5 seconds
-        fetchAttackLogs(); // Initial fetch
+        // if (fetchAlertsInterval) clearInterval(fetchAlertsInterval); // Clear previous interval if any
+        // fetchAlertsInterval = setInterval(fetchAttackLogs, 5000); // Fetch attack logs every 5 seconds
+        // fetchAttackLogs(); // Initial fetch
       });
 
       // Sound for alert
