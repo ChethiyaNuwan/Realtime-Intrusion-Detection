@@ -23,6 +23,7 @@ def capture_traffic(interface=None, duration=None, output_file=None):
     command.extend([
         "-T", "fields", 
         "-E", "separator=,",
+        "-B", "96",
         "-e", "frame.time", 
         "-e", "ip.src", 
         "-e", "ip.dst",
