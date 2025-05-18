@@ -1,8 +1,11 @@
+tensorflow
+pandas
 numpy
 joblib
-flask
-pandas
+Flask
+mysql-connector-python
+psycopg2-binary
+logging
 scikit-learn
-tensorflow
 logging
 mysql-connector-python
