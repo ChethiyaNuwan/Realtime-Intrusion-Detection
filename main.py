@@ -18,12 +18,13 @@ from predict import preprocess_flow, predict_attack, get_label_mapping
 from utils import get_latest_pcap, get_latest_csv
 
 # Constants for monitoring
-CAPTURE_DURATION = 10
+CAPTURE_DURATION = 13
 MONITORING_INTERVAL = 1
 CLEANUP_INTERVAL = 30
 MAX_FILES_KEPT = 10
 CONFIDENCE_THRESHOLD = 80  # Minimum confidence to record attack
 PPS_THRESHOLD = 10       # Minimum PPS to record attack
+CSV_ROWS_THRESHOLD = 10
 DUPLICATE_WINDOW = CAPTURE_DURATION  # Time window to check for duplicates
 
 # Setup logging
@@ -181,14 +182,14 @@ def monitor_network(interface):
                 logging.info(f"Processing flow file: {flow_file}")
                 try:
                     X = preprocess_flow(flow_file)
-                    if X.shape[0] == 0:
-                        logging.warning(f"No data to predict in flow file: {flow_file}")
+                    if X.shape[0] == 0 or len(X) <= CSV_ROWS_THRESHOLD:
+                        logging.warning(f"Not enough data to predict in flow file: {flow_file}")
                         # Optionally, append a benign/unknown status or skip
                         latest_data[interface].append({
                             'timestamp': time.time(),
                             'pps': int(current_pps),
                             'predicted_label': 'Benign', # Or 'Unknown'
-                            'confidence': 0,
+                            'confidence': 100,
                         })
                         if len(latest_data[interface]) > MAX_FILES_KEPT:
                             latest_data[interface] = latest_data[interface][-MAX_FILES_KEPT:]
@@ -372,4 +373,4 @@ if __name__ == '__main__':
     sync_thread.start()
 
     # Run the Flask app
-    app.run(host='0.0.0.0', port=5000, debug=True) # Uncommented and enabled debug mode
+    app.run(host='localhost', port=5000, debug=True) # Uncommented and enabled debug mode
